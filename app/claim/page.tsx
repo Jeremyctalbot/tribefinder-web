@@ -18,6 +18,8 @@ function ClaimPageContent() {
   const [church, setChurch] = useState<ChurchProfile | null>(null)
   const [loadingChurch, setLoadingChurch] = useState(true)
 
+  const [manualMode, setManualMode] = useState(false)
+
   const [churchName, setChurchName] = useState('')
   const [fullName, setFullName] = useState('')
   const [roleTitle, setRoleTitle] = useState('')
@@ -38,7 +40,7 @@ function ClaimPageContent() {
       setLoadingChurch(true)
       setErrorMessage('')
 
-      if (!churchId) {
+      if (!churchId || manualMode) {
         setLoadingChurch(false)
         return
       }
@@ -61,7 +63,7 @@ function ClaimPageContent() {
     }
 
     loadChurch()
-  }, [churchId])
+  }, [churchId, manualMode])
 
   async function handleSubmit() {
     setIsSubmitting(true)
@@ -87,7 +89,7 @@ function ClaimPageContent() {
       return
     }
 
-    if (churchId) {
+    if (churchId && !manualMode) {
       const { data: latestChurch, error: latestChurchError } = await supabase
         .from('church_profiles')
         .select('id, church_name, verification_status')
@@ -131,7 +133,7 @@ function ClaimPageContent() {
       return
     }
 
-    if (churchId) {
+    if (churchId && !manualMode) {
       const { data: existingClaimsById, error: claimByIdError } = await supabase
         .from('church_claim_requests')
         .select('id, status')
@@ -181,7 +183,7 @@ function ClaimPageContent() {
     }
 
     const { error } = await supabase.from('church_claim_requests').insert({
-      church_id: churchId || null,
+      church_id: manualMode ? null : churchId || null,
       church_name: cleanChurchName,
       full_name: fullName.trim(),
       role_title: roleTitle.trim(),
@@ -235,7 +237,30 @@ function ClaimPageContent() {
             access until the claim is reviewed and approved.
           </p>
 
-          {loadingChurch && churchId && (
+          {!manualMode && (
+            <button
+              type="button"
+              onClick={() => {
+                setManualMode(true)
+                setChurch(null)
+                setChurchName('')
+                setErrorMessage('')
+              }}
+              className="mt-6 text-sm font-medium text-teal-300 transition hover:text-teal-200"
+            >
+              Church not listed? Submit manually →
+            </button>
+          )}
+
+          {manualMode && (
+            <div className="mt-6 rounded-2xl border border-teal-400/20 bg-teal-400/10 p-4">
+              <p className="text-sm text-teal-100">
+                Manual church submission mode enabled.
+              </p>
+            </div>
+          )}
+
+          {loadingChurch && churchId && !manualMode && (
             <p className="mt-4 text-white/60">Loading church...</p>
           )}
 
@@ -245,7 +270,7 @@ function ClaimPageContent() {
             </p>
           )}
 
-          {alreadyClaimed ? (
+          {alreadyClaimed && !manualMode ? (
             <div className="mt-8 rounded-2xl border border-teal-300/20 bg-teal-300/10 p-5">
               <h2 className="text-xl font-black text-teal-200">
                 Already claimed
@@ -260,10 +285,14 @@ function ClaimPageContent() {
                 label="Church Name"
                 value={churchName}
                 onChange={setChurchName}
-                disabled={Boolean(churchId)}
+                disabled={Boolean(churchId) && !manualMode}
               />
 
-              <Input label="Full Name" value={fullName} onChange={setFullName} />
+              <Input
+                label="Full Name"
+                value={fullName}
+                onChange={setFullName}
+              />
 
               <Input
                 label="Role / Title"
@@ -278,14 +307,23 @@ function ClaimPageContent() {
                 type="email"
               />
 
-              <Input label="Phone" value={phone} onChange={setPhone} />
+              <Input
+                label="Phone"
+                value={phone}
+                onChange={setPhone}
+              />
 
-              <Input label="Website" value={website} onChange={setWebsite} />
+              <Input
+                label="Website"
+                value={website}
+                onChange={setWebsite}
+              />
 
               <div>
                 <label className="text-sm text-gray-300">
                   Why are you authorized to manage this church?
                 </label>
+
                 <textarea
                   value={notes}
                   onChange={(event) => setNotes(event.target.value)}
@@ -299,7 +337,9 @@ function ClaimPageContent() {
                 disabled={isSubmitting || loadingChurch}
                 className="w-full rounded bg-teal-400 py-3 font-bold text-black disabled:opacity-60"
               >
-                {isSubmitting ? 'Submitting...' : 'Submit for Verification'}
+                {isSubmitting
+                  ? 'Submitting...'
+                  : 'Submit for Verification'}
               </button>
             </div>
           )}
@@ -325,6 +365,7 @@ function Input({
   return (
     <div>
       <label className="text-sm text-gray-300">{label}</label>
+
       <input
         type={type}
         value={value}
@@ -340,7 +381,7 @@ export default function ClaimPage() {
   return (
     <Suspense
       fallback={
-        <main className="min-h-screen bg-[#070B14] text-white flex items-center justify-center">
+        <main className="flex min-h-screen items-center justify-center bg-[#070B14] text-white">
           Loading...
         </main>
       }
