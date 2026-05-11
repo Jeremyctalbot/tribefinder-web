@@ -694,7 +694,7 @@ export default function Dashboard() {
   if (!isApproved(profile.verification_status)) {
     return (
       <PendingAccessScreen
-        title="verification pending"
+        title="Verification pending"
         message="Your church profile is still under review. Dashboard access unlocks only after your claim has been approved."
       />
     )
@@ -762,12 +762,19 @@ export default function Dashboard() {
             }}
           />
 
-          <a
+          <Link
             href={`/church/${profile.id}`}
             className="rounded-2xl border border-white/10 bg-white/5 px-6 py-3 font-bold text-white/80 transition hover:bg-white/10"
           >
             View Public Page
-          </a>
+          </Link>
+
+          <Link
+            href="/plans"
+            className="rounded-2xl border border-teal-300/20 bg-teal-300/10 px-6 py-3 font-bold text-teal-100 transition hover:bg-teal-300/15"
+          >
+            View Plans
+          </Link>
         </div>
 
         {activeTab === 'profile' && (
@@ -944,17 +951,25 @@ function EditProfileForm({
     setForm({ ...form, [key]: value })
   }
 
-  function toggleArray(key: keyof ChurchProfileForm, value: string) {
-    const current = form[key]
+  function toggleArray(
+  key:
+    | 'ministry_tags'
+    | 'newcomer_features'
+    | 'serving_focuses'
+    | 'target_life_stages',
+  value: string
+) {
+  const current = form[key] ?? []
 
-    if (!Array.isArray(current)) return
+  const next = current.includes(value)
+    ? current.filter((item) => item !== value)
+    : [...current, value].sort()
 
-    const next = current.includes(value)
-      ? current.filter((item) => item !== value)
-      : [...current, value].sort()
-
-    setForm({ ...form, [key]: next })
-  }
+  setForm({
+    ...form,
+    [key]: next,
+  })
+}
 
   function updateServiceRow(
     index: number,
@@ -1330,7 +1345,11 @@ function PhotoManager({
     setPhotoMessage('')
 
     if (remainingSlots <= 0) {
-      setPhotoError(`Your ${planName} plan allows ${photoLimit} photo${photoLimit === 1 ? '' : 's'}.`)
+      setPhotoError(
+        `Your ${planName} plan allows ${photoLimit} photo${
+          photoLimit === 1 ? '' : 's'
+        }.`
+      )
       return
     }
 
@@ -1440,9 +1459,15 @@ function PhotoManager({
             </p>
           </div>
 
-          <div className="rounded-2xl border border-white/10 bg-black/20 px-5 py-4 text-sm text-white/65">
-            {getUpgradeText(photoLimit)}
-          </div>
+          <Link
+            href="/plans"
+            className="rounded-2xl border border-white/10 bg-black/20 px-5 py-4 text-sm text-white/75 transition hover:border-teal-300/30 hover:bg-teal-300/10 hover:text-teal-100"
+          >
+            <span className="block font-bold">{getUpgradeText(photoLimit)}</span>
+            <span className="mt-1 block text-xs font-black uppercase tracking-[0.16em] text-teal-200">
+              View plans
+            </span>
+          </Link>
         </div>
       </div>
 
@@ -1479,10 +1504,21 @@ function PhotoManager({
 
         <p className="mt-1 text-sm text-white/45">
           {remainingSlots > 0
-            ? `${remainingSlots} upload slot${remainingSlots === 1 ? '' : 's'} remaining. Max ${MAX_IMAGE_SIZE_MB} MB each.`
+            ? `${remainingSlots} upload slot${
+                remainingSlots === 1 ? '' : 's'
+              } remaining. Max ${MAX_IMAGE_SIZE_MB} MB each.`
             : 'Upgrade your plan to add more photos.'}
         </p>
       </label>
+
+      {remainingSlots <= 0 && (
+        <Link
+          href="/plans"
+          className="block rounded-2xl border border-teal-300/20 bg-teal-300/10 px-5 py-4 text-center font-black text-teal-100 transition hover:bg-teal-300/15"
+        >
+          View photo upgrade options
+        </Link>
+      )}
 
       {(photoError || photoMessage) && (
         <div
@@ -1509,9 +1545,7 @@ function PhotoManager({
               >
                 <div>
                   <p className="font-black text-white/50">Slot {index + 1}</p>
-                  <p className="mt-1 text-xs text-white/35">
-                    {index < photoLimit ? 'Available' : 'Locked'}
-                  </p>
+                  <p className="mt-1 text-xs text-white/35">Available</p>
                 </div>
               </div>
             )
@@ -1565,17 +1599,21 @@ function PhotoManager({
       {photoLimit < 10 && (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           {Array.from({ length: 10 - photoLimit }).map((_, index) => (
-            <div
+            <Link
+              href="/plans"
               key={`locked-${index}`}
-              className="flex aspect-[4/3] items-center justify-center rounded-3xl border border-white/10 bg-black/30 p-4 text-center opacity-70"
+              className="flex aspect-[4/3] items-center justify-center rounded-3xl border border-white/10 bg-black/30 p-4 text-center opacity-80 transition hover:border-teal-300/25 hover:bg-teal-300/10 hover:opacity-100"
             >
               <div>
                 <p className="text-xl">🔒</p>
                 <p className="mt-2 text-xs font-black uppercase tracking-[0.16em] text-white/35">
                   Upgrade slot
                 </p>
+                <p className="mt-1 text-xs font-bold text-teal-200">
+                  View plans
+                </p>
               </div>
-            </div>
+            </Link>
           ))}
         </div>
       )}
