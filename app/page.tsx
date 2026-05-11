@@ -187,9 +187,50 @@ export default function Home() {
         </div>
       </section>
 
-      {/* FOOTER */}
-      <footer className="relative z-10 border-t border-white/10 px-6 py-8 text-center text-sm text-gray-500">
-        © 2026 Tribe Finder. Built for people looking for a church that actually fits.
+            {/* FOOTER */}
+      <footer className="relative z-10 border-t border-white/10 px-6 py-10">
+        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-6 md:flex-row">
+          
+          <div className="text-center md:text-left">
+            <p className="text-sm text-gray-500">
+              © 2026 Tribe Finder Co. LLC
+            </p>
+
+            <p className="mt-2 text-sm text-gray-600">
+              Built for people looking for a church that actually fits.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-center gap-6 text-sm text-gray-400">
+            <a
+              href="/terms"
+              className="transition hover:text-white"
+            >
+              Terms
+            </a>
+
+            <a
+              href="/privacy"
+              className="transition hover:text-white"
+            >
+              Privacy
+            </a>
+
+            <a
+              href="/contact"
+              className="transition hover:text-white"
+            >
+              Contact
+            </a>
+
+            <a
+              href="mailto:info@tribefinderapp.co"
+              className="transition hover:text-white"
+            >
+              Support
+            </a>
+          </div>
+        </div>
       </footer>
 
     </main>
