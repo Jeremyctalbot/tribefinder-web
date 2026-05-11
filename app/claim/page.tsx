@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
@@ -11,7 +11,7 @@ type ChurchProfile = {
   verification_status: string | null
 }
 
-export default function ClaimPage() {
+function ClaimPageContent() {
   const searchParams = useSearchParams()
   const churchId = searchParams.get('church')
 
@@ -27,7 +27,6 @@ export default function ClaimPage() {
   const [notes, setNotes] = useState('')
 
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [successMessage, setSuccessMessage] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
 
   function isApproved(status?: string | null) {
@@ -66,7 +65,6 @@ export default function ClaimPage() {
 
   async function handleSubmit() {
     setIsSubmitting(true)
-    setSuccessMessage('')
     setErrorMessage('')
 
     const cleanChurchName = churchName.trim()
@@ -89,7 +87,6 @@ export default function ClaimPage() {
       return
     }
 
-    // 1. Block if church profile itself is already approved
     if (churchId) {
       const { data: latestChurch, error: latestChurchError } = await supabase
         .from('church_profiles')
@@ -110,12 +107,12 @@ export default function ClaimPage() {
       }
     }
 
-    // 2. Block by church name too, even if churchId is missing
-    const { data: matchingApprovedProfiles, error: profileNameError } = await supabase
-      .from('church_profiles')
-      .select('id, church_name, verification_status')
-      .ilike('church_name', cleanChurchName)
-      .limit(1)
+    const { data: matchingApprovedProfiles, error: profileNameError } =
+      await supabase
+        .from('church_profiles')
+        .select('id, church_name, verification_status')
+        .ilike('church_name', cleanChurchName)
+        .limit(1)
 
     if (profileNameError) {
       setErrorMessage(profileNameError.message)
@@ -125,14 +122,15 @@ export default function ClaimPage() {
 
     if (
       matchingApprovedProfiles &&
-      matchingApprovedProfiles.some((profile) => isApproved(profile.verification_status))
+      matchingApprovedProfiles.some((profile) =>
+        isApproved(profile.verification_status)
+      )
     ) {
       setErrorMessage('This church has already been claimed.')
       setIsSubmitting(false)
       return
     }
 
-    // 3. Block pending/approved claim requests by church_id
     if (churchId) {
       const { data: existingClaimsById, error: claimByIdError } = await supabase
         .from('church_claim_requests')
@@ -158,13 +156,13 @@ export default function ClaimPage() {
       }
     }
 
-    // 4. Block pending/approved claim requests by church_name
-    const { data: existingClaimsByName, error: claimByNameError } = await supabase
-      .from('church_claim_requests')
-      .select('id, status')
-      .ilike('church_name', cleanChurchName)
-      .in('status', ['pending', 'approved'])
-      .limit(1)
+    const { data: existingClaimsByName, error: claimByNameError } =
+      await supabase
+        .from('church_claim_requests')
+        .select('id, status')
+        .ilike('church_name', cleanChurchName)
+        .in('status', ['pending', 'approved'])
+        .limit(1)
 
     if (claimByNameError) {
       setErrorMessage(claimByNameError.message)
@@ -204,20 +202,13 @@ export default function ClaimPage() {
       return
     }
 
-    setSuccessMessage('Claim submitted successfully. We’ll review it soon.')
-    setFullName('')
-    setRoleTitle('')
-    setEmail('')
-    setPhone('')
-    setWebsite('')
-    setNotes('')
-    setIsSubmitting(false)
+    window.location.href = '/pending'
   }
 
   const alreadyClaimed = isApproved(church?.verification_status)
 
   return (
-    <main className="min-h-screen bg-[#070B14] text-white overflow-hidden">
+    <main className="min-h-screen overflow-hidden bg-[#070B14] text-white">
       <div className="fixed inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(20,184,166,0.24),_transparent_32%),radial-gradient(circle_at_bottom_right,_rgba(59,130,246,0.22),_transparent_34%)]" />
 
       <nav className="relative z-10 flex items-center justify-between px-6 py-6">
@@ -227,17 +218,22 @@ export default function ClaimPage() {
 
         <Link
           href="/login"
-          className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/80 hover:bg-white/10 transition"
+          className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/80 transition hover:bg-white/10"
         >
           Church login
         </Link>
       </nav>
 
       <section className="relative z-10 flex min-h-[calc(100vh-96px)] items-center justify-center px-6 py-10">
-        <div className="w-full max-w-2xl rounded-[2rem] border border-white/10 bg-white/[0.07] p-6 md:p-8 shadow-2xl backdrop-blur">
-          <h1 className="text-4xl md:text-5xl font-black tracking-tight">
+        <div className="w-full max-w-2xl rounded-[2rem] border border-white/10 bg-white/[0.07] p-6 shadow-2xl backdrop-blur md:p-8">
+          <h1 className="text-4xl font-black tracking-tight md:text-5xl">
             claim your church
           </h1>
+
+          <p className="mt-4 text-white/65">
+            Submit your information for verification. You will not get dashboard
+            access until the claim is reviewed and approved.
+          </p>
 
           {loadingChurch && churchId && (
             <p className="mt-4 text-white/60">Loading church...</p>
@@ -246,12 +242,6 @@ export default function ClaimPage() {
           {errorMessage && (
             <p className="mt-6 rounded-2xl border border-red-400/20 bg-red-400/10 p-4 text-red-200">
               {errorMessage}
-            </p>
-          )}
-
-          {successMessage && (
-            <p className="mt-6 rounded-2xl border border-green-400/20 bg-green-400/10 p-4 text-green-200">
-              {successMessage}
             </p>
           )}
 
@@ -274,24 +264,42 @@ export default function ClaimPage() {
               />
 
               <Input label="Full Name" value={fullName} onChange={setFullName} />
-              <Input label="Role / Title" value={roleTitle} onChange={setRoleTitle} />
-              <Input label="Email" value={email} onChange={setEmail} type="email" />
-              <Input label="Phone" value={phone} onChange={setPhone} />
-              <Input label="Website" value={website} onChange={setWebsite} />
 
-              <textarea
-                placeholder="Notes"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                className="w-full rounded bg-black border border-white/20 p-3"
+              <Input
+                label="Role / Title"
+                value={roleTitle}
+                onChange={setRoleTitle}
               />
 
+              <Input
+                label="Email"
+                value={email}
+                onChange={setEmail}
+                type="email"
+              />
+
+              <Input label="Phone" value={phone} onChange={setPhone} />
+
+              <Input label="Website" value={website} onChange={setWebsite} />
+
+              <div>
+                <label className="text-sm text-gray-300">
+                  Why are you authorized to manage this church?
+                </label>
+                <textarea
+                  value={notes}
+                  onChange={(event) => setNotes(event.target.value)}
+                  className="mt-1 min-h-32 w-full rounded border border-white/20 bg-black p-3 text-white outline-none focus:border-teal-300/60"
+                />
+              </div>
+
               <button
+                type="button"
                 onClick={handleSubmit}
                 disabled={isSubmitting || loadingChurch}
                 className="w-full rounded bg-teal-400 py-3 font-bold text-black disabled:opacity-60"
               >
-                {isSubmitting ? 'Submitting...' : 'Submit Claim'}
+                {isSubmitting ? 'Submitting...' : 'Submit for Verification'}
               </button>
             </div>
           )}
@@ -310,7 +318,7 @@ function Input({
 }: {
   label: string
   value: string
-  onChange: (v: string) => void
+  onChange: (value: string) => void
   type?: string
   disabled?: boolean
 }) {
@@ -321,9 +329,23 @@ function Input({
         type={type}
         value={value}
         disabled={disabled}
-        onChange={(e) => onChange(e.target.value)}
-        className="mt-1 w-full rounded bg-black border border-white/20 p-3 disabled:opacity-60"
+        onChange={(event) => onChange(event.target.value)}
+        className="mt-1 w-full rounded border border-white/20 bg-black p-3 text-white outline-none transition focus:border-teal-300/60 disabled:opacity-60"
       />
     </div>
+  )
+}
+
+export default function ClaimPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen bg-[#070B14] text-white flex items-center justify-center">
+          Loading...
+        </main>
+      }
+    >
+      <ClaimPageContent />
+    </Suspense>
   )
 }
