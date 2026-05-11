@@ -186,6 +186,7 @@ function ClaimPageContent() {
     }
 
     const { error } = await supabase.from('church_claim_requests').insert({
+      user_id: '00000000-0000-0000-0000-000000000000',
       church_id: manualMode ? null : churchId || null,
       church_name: cleanChurchName,
       full_name: fullName.trim(),
