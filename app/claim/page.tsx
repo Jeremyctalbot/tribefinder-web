@@ -185,18 +185,22 @@ function ClaimPageContent() {
       return
     }
 
-    const { error } = await supabase.from('church_claim_requests').insert({
-      user_id: '00000000-0000-0000-0000-000000000000',
-      church_id: manualMode ? null : churchId || null,
-      church_name: cleanChurchName,
-      full_name: fullName.trim(),
-      role_title: roleTitle.trim(),
-      church_email: email.trim(),
-      phone: phone.trim(),
-      website: website.trim(),
-      authority_explanation: notes.trim(),
-      status: 'pending',
-    })
+    const {
+  data: { user },
+} = await supabase.auth.getUser()
+
+const { error } = await supabase.from('church_claim_requests').insert({
+  user_id: user?.id ?? null,
+  church_id: manualMode ? null : churchId || null,
+  church_name: cleanChurchName,
+  full_name: fullName.trim(),
+  role_title: roleTitle.trim(),
+  church_email: email.trim(),
+  phone: phone.trim(),
+  website: website.trim(),
+  authority_explanation: notes.trim(),
+  status: 'pending',
+})
 
     if (error) {
       setErrorMessage(
