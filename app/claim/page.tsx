@@ -190,7 +190,7 @@ function ClaimPageContent() {
       church_name: cleanChurchName,
       full_name: fullName.trim(),
       role_title: roleTitle.trim(),
-      email: email.trim(),
+      church_email: email.trim(),
       phone: phone.trim(),
       website: website.trim(),
       notes: notes.trim(),
