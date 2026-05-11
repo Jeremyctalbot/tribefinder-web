@@ -193,7 +193,7 @@ function ClaimPageContent() {
       church_email: email.trim(),
       phone: phone.trim(),
       website: website.trim(),
-      notes: notes.trim(),
+      authority_explanation: notes.trim(),
       status: 'pending',
     })
 
