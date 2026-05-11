@@ -14,13 +14,16 @@ type ChurchProfile = {
 function ClaimPageContent() {
   const searchParams = useSearchParams()
   const churchId = searchParams.get('church')
+  const churchNameFromUrl = searchParams.get('churchName') || ''
 
   const [church, setChurch] = useState<ChurchProfile | null>(null)
   const [loadingChurch, setLoadingChurch] = useState(true)
 
-  const [manualMode, setManualMode] = useState(false)
+  const [manualMode, setManualMode] = useState(
+    searchParams.get('manual') === 'true'
+  )
 
-  const [churchName, setChurchName] = useState('')
+  const [churchName, setChurchName] = useState(churchNameFromUrl)
   const [fullName, setFullName] = useState('')
   const [roleTitle, setRoleTitle] = useState('')
   const [email, setEmail] = useState('')
