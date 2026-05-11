@@ -112,6 +112,13 @@ export default function FindYourChurchPage() {
               Search by ZIP code, choose your church, then claim the profile.
             </p>
 
+            <Link
+  href="/claim?manual=true"
+  className="mt-6 inline-flex rounded-full border border-teal-300/20 bg-teal-300/10 px-5 py-3 text-sm font-bold text-teal-200 transition hover:bg-teal-300/20"
+>
+  Church not listed? Submit manually →
+</Link>
+
             <div className="mt-8 grid gap-4 md:grid-cols-[220px_1fr_auto]">
               <div>
                 <label className="text-sm font-semibold text-white/70">
@@ -150,6 +157,15 @@ export default function FindYourChurchPage() {
               </div>
             </div>
 
+            <div className="mt-6">
+              <Link
+                href="/claim?manual=true"
+                className="inline-flex rounded-full border border-teal-300/20 bg-teal-300/10 px-5 py-3 text-sm font-bold text-teal-200 transition hover:bg-teal-300/20"
+              >
+                Church not listed? Submit manually →
+              </Link>
+            </div>
+
             {errorMessage && (
               <p className="mt-6 rounded-2xl border border-red-400/20 bg-red-400/10 p-4 text-red-200">
                 {errorMessage}
@@ -162,8 +178,17 @@ export default function FindYourChurchPage() {
               !isLoading &&
               filteredChurches.length === 0 &&
               !errorMessage && (
-                <div className="rounded-[2rem] border border-white/10 bg-white/[0.06] p-6 text-white/70">
-                  No churches found for that ZIP code yet.
+                <div className="rounded-[2rem] border border-white/10 bg-white/[0.06] p-6">
+                  <p className="text-white/70">
+                    No churches found for that ZIP code yet.
+                  </p>
+
+                  <Link
+                    href="/claim?manual=true"
+                    className="mt-5 inline-flex rounded-full border border-teal-300/20 bg-teal-300/10 px-5 py-3 text-sm font-bold text-teal-200 transition hover:bg-teal-300/20"
+                  >
+                    Church not listed? Submit manually →
+                  </Link>
                 </div>
               )}
 
