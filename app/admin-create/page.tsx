@@ -16,6 +16,30 @@ export default function AdminCreatePage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
 
+  const ADMIN_CREATE_KEY = 'tribefinder-admin-setup-2026'
+
+  const searchParams = new URLSearchParams(
+    typeof window !== 'undefined' ? window.location.search : ''
+  )
+
+  if (searchParams.get('key') !== ADMIN_CREATE_KEY) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[#05070F] px-6 text-white">
+        <div className="rounded-3xl border border-white/10 bg-white/[0.06] p-8 text-center shadow-2xl backdrop-blur-xl">
+          <p className="text-sm font-black uppercase tracking-[0.2em] text-red-300">
+            Restricted
+          </p>
+
+          <h1 className="mt-4 text-4xl font-black">Not Found</h1>
+
+          <p className="mt-3 text-white/55">
+            This route is restricted.
+          </p>
+        </div>
+      </main>
+    )
+  }
+
   async function handleCreateAdmin() {
     setIsSubmitting(true)
     setErrorMessage('')
@@ -47,12 +71,16 @@ export default function AdminCreatePage() {
       return
     }
 
+    const [firstName, ...lastNameParts] = cleanFullName.split(' ')
+    const lastName = lastNameParts.join(' ')
+
     const { data, error } = await supabase.auth.signUp({
       email: cleanEmail,
       password,
       options: {
         data: {
-          full_name: cleanFullName,
+          first_name: firstName,
+          last_name: lastName,
           role: 'admin',
         },
       },
@@ -77,8 +105,9 @@ export default function AdminCreatePage() {
       .upsert({
         id: user.id,
         email: cleanEmail,
-        full_name: cleanFullName,
         role: 'admin',
+        first_name: firstName,
+        last_name: lastName || null,
         created_at: new Date().toISOString(),
       })
 
