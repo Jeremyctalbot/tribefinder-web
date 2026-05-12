@@ -1,4 +1,3 @@
-// LoginForm.tsx
 'use client'
 
 import { useMemo, useState } from 'react'
@@ -15,6 +14,7 @@ type ServiceTime = {
 
 const PHOTO_BUCKET = 'church-images'
 const MAX_IMAGE_SIZE_MB = 5
+const PASSWORD_RESET_REDIRECT_URL = 'https://tribefinderapp.co/reset-password'
 
 const denominations = [
   'Baptist',
@@ -158,7 +158,9 @@ export default function LoginForm({
   const [photoError, setPhotoError] = useState('')
 
   const [isLoading, setIsLoading] = useState(false)
+  const [isSendingReset, setIsSendingReset] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
+  const [successMessage, setSuccessMessage] = useState('')
 
   const attendanceNumber = Number(weeklyAttendance)
   const churchSize = useMemo(() => getChurchSize(attendanceNumber || 0), [attendanceNumber])
@@ -217,9 +219,10 @@ export default function LoginForm({
   async function handleLogin() {
     setIsLoading(true)
     setErrorMessage('')
+    setSuccessMessage('')
 
     const { error } = await supabase.auth.signInWithPassword({
-      email,
+      email: email.trim(),
       password,
     })
 
@@ -230,6 +233,33 @@ export default function LoginForm({
     }
 
     router.push('/dashboard')
+  }
+
+  async function handleForgotPassword() {
+    setErrorMessage('')
+    setSuccessMessage('')
+
+    const trimmedEmail = email.trim()
+
+    if (!trimmedEmail) {
+      setErrorMessage('Enter your email first, then click forgot password.')
+      return
+    }
+
+    setIsSendingReset(true)
+
+    const { error } = await supabase.auth.resetPasswordForEmail(trimmedEmail, {
+      redirectTo: PASSWORD_RESET_REDIRECT_URL,
+    })
+
+    if (error) {
+      setErrorMessage(error.message)
+      setIsSendingReset(false)
+      return
+    }
+
+    setSuccessMessage('Password reset email sent. Check your inbox.')
+    setIsSendingReset(false)
   }
 
   async function uploadSelectedPhoto(userId: string) {
@@ -258,6 +288,7 @@ export default function LoginForm({
   async function handleCreateProfile() {
     setIsLoading(true)
     setErrorMessage('')
+    setSuccessMessage('')
 
     const trimmedEmail = email.trim()
     const trimmedChurchName = churchName.trim()
@@ -473,6 +504,7 @@ export default function LoginForm({
               onClick={() => {
                 setMode('login')
                 setErrorMessage('')
+                setSuccessMessage('')
               }}
               className={`rounded-xl py-3 text-sm font-bold transition ${
                 mode === 'login'
@@ -488,6 +520,7 @@ export default function LoginForm({
               onClick={() => {
                 setMode('create')
                 setErrorMessage('')
+                setSuccessMessage('')
               }}
               className={`rounded-xl py-3 text-sm font-bold transition ${
                 mode === 'create'
@@ -541,6 +574,19 @@ export default function LoginForm({
                 <Field label="Email" value={email} setValue={setEmail} type="email" />
                 <Field label="Password" value={password} setValue={setPassword} type="password" />
               </div>
+
+              {mode === 'login' && (
+                <div className="mt-4 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={handleForgotPassword}
+                    disabled={isSendingReset}
+                    className="text-sm font-bold text-teal-300 transition hover:text-teal-200 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isSendingReset ? 'Sending reset email...' : 'Forgot password?'}
+                  </button>
+                </div>
+              )}
             </PremiumSection>
 
             {mode === 'create' && (
@@ -726,6 +772,12 @@ export default function LoginForm({
             {errorMessage && (
               <p className="rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-200">
                 {errorMessage}
+              </p>
+            )}
+
+            {successMessage && (
+              <p className="rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-100">
+                {successMessage}
               </p>
             )}
 
