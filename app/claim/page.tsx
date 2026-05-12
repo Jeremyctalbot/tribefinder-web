@@ -189,6 +189,14 @@ function ClaimPageContent() {
   data: { user },
 } = await supabase.auth.getUser()
 
+console.log('CLAIM USER:', user)
+
+if (!manualMode && !user?.id) {
+  setErrorMessage('Please log in again before submitting your claim.')
+  setIsSubmitting(false)
+  return
+}
+
 const { error } = await supabase.from('church_claim_requests').insert({
   user_id: user?.id ?? null,
   church_id: manualMode ? null : churchId || null,
