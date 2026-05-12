@@ -82,7 +82,6 @@ type PendingVerificationItem = {
 }
 
 const ADMIN_ACCESS_KEY = process.env.NEXT_PUBLIC_ADMIN_ACCESS_KEY || ''
-
 const ADMIN_GATE_STORAGE_KEY = 'tribe_finder_admin_gate_unlocked'
 
 function formatDate(value?: string | null) {
@@ -104,12 +103,10 @@ function display(value?: string | number | null) {
 }
 
 function normalizeClaimRequest(claim: ChurchClaimRequest): PendingVerificationItem {
-  const linkedChurchId = claim.church_id || claim.claimed_church_id || claim.user_id
-
   return {
     source: 'claim_request',
     id: claim.id,
-    churchProfileId: linkedChurchId,
+    churchProfileId: claim.user_id,
     userId: claim.user_id,
     churchName: claim.church_name,
     fullName: claim.full_name,
@@ -310,21 +307,11 @@ export default function AdminPage() {
       return
     }
 
-    const normalizedClaims = (claimData ?? []).map(normalizeClaimRequest)
-    const normalizedProfiles = (profileData ?? []).map(normalizeChurchProfile)
+    setPendingItems([
+      ...(claimData ?? []).map(normalizeClaimRequest),
+      ...(profileData ?? []).map(normalizeChurchProfile),
+    ])
 
-    const seenKeys = new Set<string>()
-
-    const merged = [...normalizedClaims, ...normalizedProfiles].filter((item) => {
-      const key = `${item.source}-${item.id}`
-
-      if (seenKeys.has(key)) return false
-
-      seenKeys.add(key)
-      return true
-    })
-
-    setPendingItems(merged)
     setLoadingPending(false)
   }
 
@@ -333,10 +320,52 @@ export default function AdminPage() {
     setErrorMessage('')
     setSuccessMessage('')
 
+    if (!item.userId) {
+      setErrorMessage('This pending request does not have a user_id, so it cannot be approved yet.')
+      setActionLoadingId('')
+      return
+    }
+
     if (item.source === 'claim_request') {
+      const { error: churchProfileError } = await supabase
+        .from('church_profiles')
+        .upsert(
+          {
+            id: item.userId,
+            church_name: item.churchName,
+            full_name: item.fullName,
+            role_title: item.roleTitle,
+            email: item.email,
+            phone: item.phone,
+            website: item.website,
+            address: item.address,
+            city: item.city,
+            state: item.state,
+            zip_code: item.zipCode,
+            denomination: item.denomination,
+            authority_explanation: item.authorityExplanation,
+            verification_status: 'approved',
+            onboarding_complete: true,
+            subscription_tier: 'tier1',
+            latitude: item.latitude,
+            longitude: item.longitude,
+          },
+          { onConflict: 'id' }
+        )
+
+      if (churchProfileError) {
+        setErrorMessage(churchProfileError.message)
+        setActionLoadingId('')
+        return
+      }
+
       const { error: claimError } = await supabase
         .from('church_claim_requests')
-        .update({ status: 'approved' })
+        .update({
+          status: 'approved',
+          church_id: item.userId,
+          claimed_church_id: item.userId,
+        })
         .eq('id', item.id)
 
       if (claimError) {
@@ -346,24 +375,20 @@ export default function AdminPage() {
       }
     }
 
-    if (item.churchProfileId) {
+    if (item.source === 'church_profile') {
       const { error: profileError } = await supabase
         .from('church_profiles')
-        .update({ verification_status: 'approved' })
-        .eq('id', item.churchProfileId)
+        .update({
+          verification_status: 'approved',
+          onboarding_complete: true,
+        })
+        .eq('id', item.userId)
 
       if (profileError) {
         setErrorMessage(profileError.message)
         setActionLoadingId('')
         return
       }
-    }
-
-    if (item.userId && item.userId !== item.churchProfileId) {
-      await supabase
-        .from('church_profiles')
-        .update({ verification_status: 'approved' })
-        .eq('id', item.userId)
     }
 
     setSuccessMessage(`${display(item.churchName)} approved.`)
@@ -389,24 +414,17 @@ export default function AdminPage() {
       }
     }
 
-    if (item.churchProfileId) {
+    if (item.source === 'church_profile' && item.userId) {
       const { error: profileError } = await supabase
         .from('church_profiles')
         .update({ verification_status: 'rejected' })
-        .eq('id', item.churchProfileId)
+        .eq('id', item.userId)
 
       if (profileError) {
         setErrorMessage(profileError.message)
         setActionLoadingId('')
         return
       }
-    }
-
-    if (item.userId && item.userId !== item.churchProfileId) {
-      await supabase
-        .from('church_profiles')
-        .update({ verification_status: 'rejected' })
-        .eq('id', item.userId)
     }
 
     setSuccessMessage(`${display(item.churchName)} rejected.`)
@@ -451,9 +469,7 @@ export default function AdminPage() {
                 value={adminPassword}
                 onChange={(event) => setAdminPassword(event.target.value)}
                 onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
-                    handleGateSubmit()
-                  }
+                  if (event.key === 'Enter') handleGateSubmit()
                 }}
                 className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white outline-none transition focus:border-teal-300"
               />
@@ -579,8 +595,7 @@ export default function AdminPage() {
                 </h1>
 
                 <p className="mt-4 max-w-3xl text-white/60">
-                  Review pending claim requests and direct church profile
-                  submissions before granting dashboard access.
+                  Review pending church submissions before granting dashboard access.
                 </p>
               </div>
 
@@ -619,8 +634,7 @@ export default function AdminPage() {
                   </h2>
 
                   <p className="mt-2 text-white/55">
-                    New church claim requests and pending church profiles will
-                    appear here.
+                    New pending churches will appear here.
                   </p>
                 </div>
               ) : (
@@ -680,22 +694,17 @@ function PasswordResetPanel() {
 
   return (
     <div className="rounded-[2rem] border border-white/10 bg-white/[0.06] p-6 shadow-2xl backdrop-blur-xl md:p-8">
-      <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <p className="text-sm font-black uppercase tracking-[0.2em] text-cyan-300">
-            Account recovery
-          </p>
+      <p className="text-sm font-black uppercase tracking-[0.2em] text-cyan-300">
+        Account recovery
+      </p>
 
-          <h2 className="mt-3 text-3xl font-black tracking-tight">
-            Send password reset link
-          </h2>
+      <h2 className="mt-3 text-3xl font-black tracking-tight">
+        Send password reset link
+      </h2>
 
-          <p className="mt-3 max-w-2xl text-sm leading-6 text-white/60">
-            Send an official Supabase password reset email directly from the
-            admin dashboard.
-          </p>
-        </div>
-      </div>
+      <p className="mt-3 max-w-2xl text-sm leading-6 text-white/60">
+        Send an official Supabase password reset email directly from the admin dashboard.
+      </p>
 
       <div className="mt-8 grid gap-4 md:grid-cols-[1fr_auto]">
         <input
@@ -749,25 +758,13 @@ function VerificationCard({
       <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <Badge tone="yellow">
-              {display(item.status)}
-            </Badge>
-
+            <Badge tone="yellow">{display(item.status)}</Badge>
             <Badge tone={item.source === 'claim_request' ? 'cyan' : 'teal'}>
-              {item.source === 'claim_request'
-                ? 'Claim Request'
-                : 'Church Profile'}
+              {item.source === 'claim_request' ? 'Claim Request' : 'Church Profile'}
             </Badge>
-
-            {item.userId ? (
-              <Badge tone="emerald">
-                Auth linked
-              </Badge>
-            ) : (
-              <Badge tone="red">
-                No user id
-              </Badge>
-            )}
+            <Badge tone={item.userId ? 'emerald' : 'red'}>
+              {item.userId ? 'Auth linked' : 'No user id'}
+            </Badge>
           </div>
 
           <h2 className="mt-4 text-2xl font-black tracking-tight">
@@ -802,7 +799,7 @@ function VerificationCard({
 
       <div className="mt-6 grid gap-4 md:grid-cols-3">
         <InfoBlock label="Record ID" value={item.id} />
-        <InfoBlock label="Church Profile ID" value={item.churchProfileId} />
+        <InfoBlock label="Church Profile ID After Approval" value={item.churchProfileId} />
         <InfoBlock label="User ID" value={item.userId} />
       </div>
 
