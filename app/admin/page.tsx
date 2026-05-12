@@ -19,7 +19,6 @@ type ChurchClaimRequest = {
   full_name: string | null
   role_title: string | null
   church_email: string | null
-  email: string | null
   phone: string | null
   website: string | null
   authority_explanation: string | null
@@ -29,8 +28,11 @@ type ChurchClaimRequest = {
   created_at: string | null
 }
 
-const ADMIN_ACCESS_KEY = process.env.NEXT_PUBLIC_ADMIN_ACCESS_KEY || ''
-const ADMIN_GATE_STORAGE_KEY = 'tribe_finder_admin_gate_unlocked'
+const ADMIN_ACCESS_KEY =
+  process.env.NEXT_PUBLIC_ADMIN_ACCESS_KEY || ''
+
+const ADMIN_GATE_STORAGE_KEY =
+  'tribe_finder_admin_gate_unlocked'
 
 function formatDate(value?: string | null) {
   if (!value) return 'Unknown'
@@ -44,25 +46,45 @@ function formatDate(value?: string | null) {
 
 function display(value?: string | null) {
   const cleanValue = value?.trim()
-  return cleanValue && cleanValue.length > 0 ? cleanValue : '—'
+
+  return cleanValue && cleanValue.length > 0
+    ? cleanValue
+    : '—'
 }
 
 export default function AdminPage() {
-  const [adminProfile, setAdminProfile] = useState<AdminProfile | null>(null)
-  const [claims, setClaims] = useState<ChurchClaimRequest[]>([])
-  const [loading, setLoading] = useState(true)
-  const [loadingClaims, setLoadingClaims] = useState(false)
-  const [errorMessage, setErrorMessage] = useState('')
+  const [adminProfile, setAdminProfile] =
+    useState<AdminProfile | null>(null)
 
-  const [gateChecking, setGateChecking] = useState(true)
-  const [gateUnlocked, setGateUnlocked] = useState(false)
-  const [adminPassword, setAdminPassword] = useState('')
-  const [gateError, setGateError] = useState('')
+  const [claims, setClaims] = useState<
+    ChurchClaimRequest[]
+  >([])
+
+  const [loading, setLoading] = useState(true)
+  const [loadingClaims, setLoadingClaims] =
+    useState(false)
+
+  const [errorMessage, setErrorMessage] =
+    useState('')
+
+  const [gateChecking, setGateChecking] =
+    useState(true)
+
+  const [gateUnlocked, setGateUnlocked] =
+    useState(false)
+
+  const [adminPassword, setAdminPassword] =
+    useState('')
+
+  const [gateError, setGateError] =
+    useState('')
 
   useEffect(() => {
     const unlocked =
       typeof window !== 'undefined' &&
-      window.sessionStorage.getItem(ADMIN_GATE_STORAGE_KEY) === 'true'
+      window.sessionStorage.getItem(
+        ADMIN_GATE_STORAGE_KEY
+      ) === 'true'
 
     setGateUnlocked(unlocked)
     setGateChecking(false)
@@ -84,7 +106,10 @@ export default function AdminPage() {
         return
       }
 
-      const { data: profile, error: profileError } = await supabase
+      const {
+        data: profile,
+        error: profileError,
+      } = await supabase
         .from('profiles')
         .select('id, email, role')
         .eq('id', user.id)
@@ -112,16 +137,24 @@ export default function AdminPage() {
     setGateError('')
 
     if (!ADMIN_ACCESS_KEY) {
-      setGateError('Admin access key is not configured.')
+      setGateError(
+        'Admin access key is not configured.'
+      )
       return
     }
 
-    if (adminPassword.trim() !== ADMIN_ACCESS_KEY) {
+    if (
+      adminPassword.trim() !== ADMIN_ACCESS_KEY
+    ) {
       setGateError('Incorrect admin password.')
       return
     }
 
-    window.sessionStorage.setItem(ADMIN_GATE_STORAGE_KEY, 'true')
+    window.sessionStorage.setItem(
+      ADMIN_GATE_STORAGE_KEY,
+      'true'
+    )
+
     setGateUnlocked(true)
   }
 
@@ -132,10 +165,27 @@ export default function AdminPage() {
     const { data, error } = await supabase
       .from('church_claim_requests')
       .select(
-        'id, church_id, user_id, church_name, full_name, role_title, church_email, email, phone, website, authority_explanation, notes, status, submitted_at, created_at'
+        `
+        id,
+        church_id,
+        user_id,
+        church_name,
+        full_name,
+        role_title,
+        church_email,
+        phone,
+        website,
+        authority_explanation,
+        notes,
+        status,
+        submitted_at,
+        created_at
+      `
       )
       .eq('status', 'pending')
-      .order('submitted_at', { ascending: false })
+      .order('submitted_at', {
+        ascending: false,
+      })
 
     if (error) {
       setErrorMessage(error.message)
@@ -170,7 +220,8 @@ export default function AdminPage() {
           </h1>
 
           <p className="mt-3 text-sm leading-6 text-white/60">
-            Enter the admin access password before continuing.
+            Enter the admin access password before
+            continuing.
           </p>
 
           <div className="mt-6">
@@ -182,9 +233,15 @@ export default function AdminPage() {
               <input
                 type="password"
                 value={adminPassword}
-                onChange={(event) => setAdminPassword(event.target.value)}
+                onChange={(event) =>
+                  setAdminPassword(
+                    event.target.value
+                  )
+                }
                 onKeyDown={(event) => {
-                  if (event.key === 'Enter') handleGateSubmit()
+                  if (event.key === 'Enter') {
+                    handleGateSubmit()
+                  }
                 }}
                 className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white outline-none transition focus:border-teal-300"
               />
@@ -240,10 +297,13 @@ export default function AdminPage() {
             Access denied
           </p>
 
-          <h1 className="mt-4 text-4xl font-black">Admin only</h1>
+          <h1 className="mt-4 text-4xl font-black">
+            Admin only
+          </h1>
 
           <p className="mt-4 text-white/70">
-            Your account is signed in, but it does not have admin permissions.
+            Your account is signed in, but it does
+            not have admin permissions.
           </p>
 
           <Link
@@ -262,7 +322,10 @@ export default function AdminPage() {
       <div className="fixed inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(20,184,166,0.18),_transparent_32%),radial-gradient(circle_at_bottom_right,_rgba(59,130,246,0.16),_transparent_34%)]" />
 
       <nav className="relative z-10 flex items-center justify-between px-6 py-6">
-        <Link href="/" className="text-xl font-black">
+        <Link
+          href="/"
+          className="text-xl font-black"
+        >
           Tribe Finder
         </Link>
 
@@ -280,7 +343,9 @@ export default function AdminPage() {
             disabled={loadingClaims}
             className="rounded-full bg-teal-400 px-4 py-2 text-sm font-black text-black transition hover:bg-teal-300 disabled:opacity-60"
           >
-            {loadingClaims ? 'Refreshing...' : 'Refresh'}
+            {loadingClaims
+              ? 'Refreshing...'
+              : 'Refresh'}
           </button>
         </div>
       </nav>
@@ -298,12 +363,16 @@ export default function AdminPage() {
               </h1>
 
               <p className="mt-4 max-w-3xl text-white/60">
-                Review pending church claims before granting dashboard access.
+                Review pending church claims before
+                granting dashboard access.
               </p>
             </div>
 
             <div className="rounded-3xl border border-teal-300/20 bg-teal-300/10 px-6 py-4">
-              <p className="text-sm font-bold text-teal-100">Pending Claims</p>
+              <p className="text-sm font-bold text-teal-100">
+                Pending Claims
+              </p>
+
               <p className="mt-1 text-4xl font-black text-white">
                 {claims.length}
               </p>
@@ -323,15 +392,22 @@ export default function AdminPage() {
               </div>
             ) : claims.length === 0 ? (
               <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center">
-                <h2 className="text-2xl font-black">No pending claims</h2>
+                <h2 className="text-2xl font-black">
+                  No pending claims
+                </h2>
+
                 <p className="mt-2 text-white/55">
-                  New church claim requests will appear here.
+                  New church claim requests will
+                  appear here.
                 </p>
               </div>
             ) : (
               <div className="grid gap-5">
                 {claims.map((claim) => (
-                  <ClaimCard key={claim.id} claim={claim} />
+                  <ClaimCard
+                    key={claim.id}
+                    claim={claim}
+                  />
                 ))}
               </div>
             )}
@@ -342,9 +418,14 @@ export default function AdminPage() {
   )
 }
 
-function ClaimCard({ claim }: { claim: ChurchClaimRequest }) {
-  const claimantEmail = claim.church_email || claim.email
-  const explanation = claim.authority_explanation || claim.notes
+function ClaimCard({
+  claim,
+}: {
+  claim: ChurchClaimRequest
+}) {
+  const claimantEmail = claim.church_email
+  const explanation =
+    claim.authority_explanation || claim.notes
 
   return (
     <article className="rounded-3xl border border-white/10 bg-black/25 p-5 shadow-xl backdrop-blur">
@@ -371,40 +452,71 @@ function ClaimCard({ claim }: { claim: ChurchClaimRequest }) {
           </h2>
 
           <p className="mt-2 text-sm text-white/45">
-            Submitted {formatDate(claim.submitted_at || claim.created_at)}
+            Submitted{' '}
+            {formatDate(
+              claim.submitted_at ||
+                claim.created_at
+            )}
           </p>
         </div>
 
         <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/55">
           <p>
-            <span className="font-bold text-white/80">Claim ID:</span>{' '}
+            <span className="font-bold text-white/80">
+              Claim ID:
+            </span>{' '}
             {claim.id}
           </p>
+
           <p className="mt-1">
-            <span className="font-bold text-white/80">Church ID:</span>{' '}
+            <span className="font-bold text-white/80">
+              Church ID:
+            </span>{' '}
             {display(claim.church_id)}
           </p>
+
           <p className="mt-1">
-            <span className="font-bold text-white/80">User ID:</span>{' '}
+            <span className="font-bold text-white/80">
+              User ID:
+            </span>{' '}
             {display(claim.user_id)}
           </p>
         </div>
       </div>
 
       <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <InfoBlock label="Requester" value={claim.full_name} />
-        <InfoBlock label="Role / Title" value={claim.role_title} />
-        <InfoBlock label="Email" value={claimantEmail} />
-        <InfoBlock label="Phone" value={claim.phone} />
+        <InfoBlock
+          label="Requester"
+          value={claim.full_name}
+        />
+
+        <InfoBlock
+          label="Role / Title"
+          value={claim.role_title}
+        />
+
+        <InfoBlock
+          label="Email"
+          value={claimantEmail}
+        />
+
+        <InfoBlock
+          label="Phone"
+          value={claim.phone}
+        />
       </div>
 
       <div className="mt-4 grid gap-4 md:grid-cols-2">
-        <InfoBlock label="Website" value={claim.website} />
+        <InfoBlock
+          label="Website"
+          value={claim.website}
+        />
 
         <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-4">
           <p className="text-xs font-black uppercase tracking-[0.16em] text-white/35">
             Authority Explanation
           </p>
+
           <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-white/75">
             {display(explanation)}
           </p>
@@ -426,6 +538,7 @@ function InfoBlock({
       <p className="text-xs font-black uppercase tracking-[0.16em] text-white/35">
         {label}
       </p>
+
       <p className="mt-2 break-words text-sm font-semibold text-white/80">
         {display(value)}
       </p>
