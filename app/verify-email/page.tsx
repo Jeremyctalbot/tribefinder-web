@@ -15,7 +15,7 @@ function VerifyEmailContent() {
   const [cachedEmail, setCachedEmail] = useState(emailFromUrl)
   const [checking, setChecking] = useState(false)
   const [statusMessage, setStatusMessage] = useState(
-    'Confirm your email, then return here. This page will send you forward once your email is verified.'
+    'Confirm your email, then return here and click “I verified my email.”'
   )
   const [errorMessage, setErrorMessage] = useState('')
 
@@ -31,17 +31,6 @@ function VerifyEmailContent() {
     const storedEmail = window.sessionStorage.getItem('tribe_pending_email') || ''
     setCachedEmail(storedEmail)
   }, [emailFromUrl])
-
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      checkVerification(false)
-    }, 3000)
-
-    checkVerification(false)
-
-    return () => window.clearInterval(timer)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [email])
 
   async function ensureProfile() {
     const {
@@ -62,14 +51,19 @@ function VerifyEmailContent() {
 
     const role = user.user_metadata?.role === 'seeker' ? 'seeker' : 'church'
 
-    const { error } = await supabase.from('profiles').upsert({
-      id: user.id,
-      email: user.email ?? email,
-      role,
-      first_name: firstName,
-      last_name: lastName,
-      created_at: new Date().toISOString(),
-    })
+    const { error } = await supabase.from('profiles').upsert(
+      {
+        id: user.id,
+        email: user.email ?? email,
+        role,
+        first_name: firstName,
+        last_name: lastName,
+        created_at: new Date().toISOString(),
+      },
+      {
+        onConflict: 'id',
+      }
+    )
 
     if (error) {
       setErrorMessage(error.message)
@@ -79,9 +73,8 @@ function VerifyEmailContent() {
     return true
   }
 
-  async function checkVerification(showCheckingState = true) {
-    if (showCheckingState) setChecking(true)
-
+  async function checkVerification() {
+    setChecking(true)
     setErrorMessage('')
 
     const {
@@ -90,16 +83,25 @@ function VerifyEmailContent() {
     } = await supabase.auth.getUser()
 
     if (error) {
+      if (error.message.includes('User from sub claim in JWT does not exist')) {
+        await supabase.auth.signOut()
+        setStatusMessage(
+          'Your previous browser session was stale. Open the newest confirmation email link, then return here.'
+        )
+        setChecking(false)
+        return
+      }
+
       setErrorMessage(error.message)
-      if (showCheckingState) setChecking(false)
+      setChecking(false)
       return
     }
 
     if (!user?.id) {
       setStatusMessage(
-        'Still waiting on email confirmation. Open the confirmation link from your inbox, then return here.'
+        'No active verified session yet. Open the confirmation link from your inbox, then return here.'
       )
-      if (showCheckingState) setChecking(false)
+      setChecking(false)
       return
     }
 
@@ -107,14 +109,14 @@ function VerifyEmailContent() {
       setStatusMessage(
         'Your account exists, but the email is not verified yet. Click the confirmation link in your inbox before continuing.'
       )
-      if (showCheckingState) setChecking(false)
+      setChecking(false)
       return
     }
 
     const profileReady = await ensureProfile()
 
     if (!profileReady) {
-      if (showCheckingState) setChecking(false)
+      setChecking(false)
       return
     }
 
@@ -209,7 +211,7 @@ function VerifyEmailContent() {
           <div className="mt-8 grid gap-3 sm:grid-cols-2">
             <button
               type="button"
-              onClick={() => checkVerification(true)}
+              onClick={checkVerification}
               disabled={checking}
               className="rounded-2xl bg-teal-400 px-6 py-4 font-black text-black transition hover:bg-teal-300 disabled:opacity-60"
             >
