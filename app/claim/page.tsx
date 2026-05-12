@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useMemo, useState } from 'react'
+import { Suspense, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
@@ -122,8 +122,9 @@ function display(value?: string | number | null) {
 function ClaimPageContent() {
   const searchParams = useSearchParams()
 
-  const initialChurchName =
-    searchParams.get('churchName') || ''
+  const initialChurchName = searchParams.get('churchName') || ''
+
+  const [authChecking, setAuthChecking] = useState(true)
 
   const [step, setStep] = useState(0)
   const [mode, setMode] = useState<'claim' | 'manual'>(
@@ -171,16 +172,42 @@ function ClaimPageContent() {
 
   const steps =
     mode === 'claim'
-      ? [
-          'Find Church',
-          'Verify',
-          'Details',
-          'Ministries',
-          'Review',
-        ]
+      ? ['Find Church', 'Verify', 'Details', 'Ministries', 'Review']
       : ['Verify', 'Details', 'Ministries', 'Review']
 
   const progress = ((step + 1) / steps.length) * 100
+
+  useEffect(() => {
+    async function requireVerifiedUser() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
+      if (!user?.id) {
+        window.location.href = '/create-account'
+        return
+      }
+
+      const emailConfirmed =
+        Boolean(user.email_confirmed_at) ||
+        Boolean(user.confirmed_at)
+
+      if (!emailConfirmed) {
+        window.location.href = `/verify-email?email=${encodeURIComponent(
+          user.email ?? ''
+        )}&next=${encodeURIComponent('/claim')}`
+        return
+      }
+
+      if (user.email && !churchEmail) {
+        setChurchEmail(user.email)
+      }
+
+      setAuthChecking(false)
+    }
+
+    requireVerifiedUser()
+  }, [churchEmail])
 
   const filteredResults = useMemo(() => {
     const query = churchSearchText.trim().toLowerCase()
@@ -195,7 +222,11 @@ function ClaimPageContent() {
     })
   }, [churchSearchText, searchResults])
 
-  function toggleArray(value: string, list: string[], setter: (next: string[]) => void) {
+  function toggleArray(
+    value: string,
+    list: string[],
+    setter: (next: string[]) => void
+  ) {
     if (list.includes(value)) {
       setter(list.filter((item) => item !== value))
       return
@@ -211,7 +242,11 @@ function ClaimPageContent() {
     ])
   }
 
-  function updateServiceEntry(id: string, key: 'day' | 'time', value: string) {
+  function updateServiceEntry(
+    id: string,
+    key: 'day' | 'time',
+    value: string
+  ) {
     setServiceSchedule((current) =>
       current.map((entry) =>
         entry.id === id ? { ...entry, [key]: value } : entry
@@ -265,11 +300,7 @@ function ClaimPageContent() {
         throw new Error(json?.error || 'Church search failed.')
       }
 
-      const rawResults =
-        json?.churches ||
-        json?.results ||
-        json?.data ||
-        []
+      const rawResults = json?.churches || json?.results || json?.data || []
 
       const normalized: ChurchSearchResult[] = rawResults
         .map((item: any) => ({
@@ -284,10 +315,7 @@ function ClaimPageContent() {
             item.placeId ||
             item.google_place_id ||
             null,
-          name:
-            item.name ||
-            item.church_name ||
-            'Unknown Church',
+          name: item.name || item.church_name || 'Unknown Church',
           address:
             item.address ||
             item.formatted_address ||
@@ -390,7 +418,9 @@ function ClaimPageContent() {
 
       if (
         serviceSchedule.length === 0 ||
-        serviceSchedule.some((entry) => !clean(entry.day) || !clean(entry.time))
+        serviceSchedule.some(
+          (entry) => !clean(entry.day) || !clean(entry.time)
+        )
       ) {
         setErrorMessage('Please add at least one service day and time.')
         return false
@@ -402,7 +432,6 @@ function ClaimPageContent() {
 
   function goNext() {
     if (!validateStep()) return
-
     setStep((current) => Math.min(current + 1, steps.length - 1))
   }
 
@@ -466,13 +495,12 @@ function ClaimPageContent() {
       return
     }
 
-    const { data: approvedProfiles, error: profileError } =
-      await supabase
-        .from('church_profiles')
-        .select('id, church_name, verification_status')
-        .ilike('church_name', cleanChurchName)
-        .eq('verification_status', 'approved')
-        .limit(1)
+    const { data: approvedProfiles, error: profileError } = await supabase
+      .from('church_profiles')
+      .select('id, church_name, verification_status')
+      .ilike('church_name', cleanChurchName)
+      .eq('verification_status', 'approved')
+      .limit(1)
 
     if (profileError) {
       setErrorMessage(profileError.message)
@@ -541,6 +569,14 @@ function ClaimPageContent() {
     }
 
     window.location.href = '/onboarding/success'
+  }
+
+  if (authChecking) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[#070B14] text-white">
+        Checking account verification...
+      </main>
+    )
   }
 
   return (
@@ -864,7 +900,11 @@ function ClaimPageContent() {
                         <select
                           value={entry.day}
                           onChange={(event) =>
-                            updateServiceEntry(entry.id, 'day', event.target.value)
+                            updateServiceEntry(
+                              entry.id,
+                              'day',
+                              event.target.value
+                            )
                           }
                           className="rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-white outline-none transition focus:border-teal-300"
                         >
@@ -878,7 +918,11 @@ function ClaimPageContent() {
                         <input
                           value={entry.time}
                           onChange={(event) =>
-                            updateServiceEntry(entry.id, 'time', event.target.value)
+                            updateServiceEntry(
+                              entry.id,
+                              'time',
+                              event.target.value
+                            )
                           }
                           className="rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-white outline-none transition focus:border-teal-300"
                         />
