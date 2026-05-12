@@ -29,6 +29,9 @@ type ChurchClaimRequest = {
   created_at: string | null
 }
 
+const ADMIN_ACCESS_KEY = process.env.NEXT_PUBLIC_ADMIN_ACCESS_KEY || ''
+const ADMIN_GATE_STORAGE_KEY = 'tribe_finder_admin_gate_unlocked'
+
 function formatDate(value?: string | null) {
   if (!value) return 'Unknown'
 
@@ -51,7 +54,23 @@ export default function AdminPage() {
   const [loadingClaims, setLoadingClaims] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
 
+  const [gateChecking, setGateChecking] = useState(true)
+  const [gateUnlocked, setGateUnlocked] = useState(false)
+  const [adminPassword, setAdminPassword] = useState('')
+  const [gateError, setGateError] = useState('')
+
   useEffect(() => {
+    const unlocked =
+      typeof window !== 'undefined' &&
+      window.sessionStorage.getItem(ADMIN_GATE_STORAGE_KEY) === 'true'
+
+    setGateUnlocked(unlocked)
+    setGateChecking(false)
+  }, [])
+
+  useEffect(() => {
+    if (!gateUnlocked) return
+
     async function loadAdmin() {
       setLoading(true)
       setErrorMessage('')
@@ -87,7 +106,24 @@ export default function AdminPage() {
     }
 
     loadAdmin()
-  }, [])
+  }, [gateUnlocked])
+
+  function handleGateSubmit() {
+    setGateError('')
+
+    if (!ADMIN_ACCESS_KEY) {
+      setGateError('Admin access key is not configured.')
+      return
+    }
+
+    if (adminPassword.trim() !== ADMIN_ACCESS_KEY) {
+      setGateError('Incorrect admin password.')
+      return
+    }
+
+    window.sessionStorage.setItem(ADMIN_GATE_STORAGE_KEY, 'true')
+    setGateUnlocked(true)
+  }
 
   async function loadPendingClaims() {
     setLoadingClaims(true)
@@ -109,6 +145,75 @@ export default function AdminPage() {
 
     setClaims(data ?? [])
     setLoadingClaims(false)
+  }
+
+  if (gateChecking) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[#05070F] text-white">
+        Loading admin gate...
+      </main>
+    )
+  }
+
+  if (!gateUnlocked) {
+    return (
+      <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#05070F] px-6 text-white">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(20,184,166,0.18),_transparent_32%),radial-gradient(circle_at_bottom_right,_rgba(59,130,246,0.16),_transparent_34%)]" />
+
+        <div className="relative z-10 w-full max-w-md rounded-3xl border border-white/10 bg-white/[0.06] p-8 shadow-2xl backdrop-blur-xl">
+          <p className="text-sm font-black uppercase tracking-[0.2em] text-teal-300">
+            Admin gate
+          </p>
+
+          <h1 className="mt-3 text-4xl font-black tracking-tight">
+            Protected access
+          </h1>
+
+          <p className="mt-3 text-sm leading-6 text-white/60">
+            Enter the admin access password before continuing.
+          </p>
+
+          <div className="mt-6">
+            <label className="block">
+              <span className="text-sm font-semibold text-gray-300">
+                Admin password
+              </span>
+
+              <input
+                type="password"
+                value={adminPassword}
+                onChange={(event) => setAdminPassword(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') handleGateSubmit()
+                }}
+                className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white outline-none transition focus:border-teal-300"
+              />
+            </label>
+          </div>
+
+          {gateError && (
+            <p className="mt-4 rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-200">
+              {gateError}
+            </p>
+          )}
+
+          <button
+            type="button"
+            onClick={handleGateSubmit}
+            className="mt-6 w-full rounded-2xl bg-teal-400 py-4 font-black text-black shadow-lg shadow-teal-400/20 transition hover:bg-teal-300"
+          >
+            Continue
+          </button>
+
+          <Link
+            href="/"
+            className="mt-4 block text-center text-sm font-bold text-white/45 transition hover:text-white"
+          >
+            Back to home
+          </Link>
+        </div>
+      </main>
+    )
   }
 
   if (loading) {
