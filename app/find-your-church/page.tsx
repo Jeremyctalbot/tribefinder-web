@@ -22,7 +22,7 @@ function claimUrl(church: ChurchSearchResult) {
     return `/church/${church.id}`
   }
 
-  return `/claim?churchName=${encodeURIComponent(church.churchName)}`
+  return '/create-account'
 }
 
 export default function FindYourChurchPage() {
@@ -109,21 +109,22 @@ export default function FindYourChurchPage() {
             </h1>
 
             <p className="mt-4 max-w-2xl text-lg leading-relaxed text-white/70">
-              Search by ZIP code, choose your church, then claim the profile.
+              Search by ZIP code, choose your church, then continue through account creation and verification.
             </p>
 
             <Link
-  href="/claim?manual=true"
-  className="mt-6 inline-flex rounded-full border border-teal-300/20 bg-teal-300/10 px-5 py-3 text-sm font-bold text-teal-200 transition hover:bg-teal-300/20"
->
-  Church not listed? Submit manually →
-</Link>
+              href="/create-account"
+              className="mt-6 inline-flex rounded-full border border-teal-300/20 bg-teal-300/10 px-5 py-3 text-sm font-bold text-teal-200 transition hover:bg-teal-300/20"
+            >
+              Church not listed? Create account →
+            </Link>
 
             <div className="mt-8 grid gap-4 md:grid-cols-[220px_1fr_auto]">
               <div>
                 <label className="text-sm font-semibold text-white/70">
                   ZIP code
                 </label>
+
                 <input
                   value={zipCode}
                   onChange={(event) => setZipCode(event.target.value)}
@@ -139,6 +140,7 @@ export default function FindYourChurchPage() {
                 <label className="text-sm font-semibold text-white/70">
                   Search church name
                 </label>
+
                 <input
                   value={searchText}
                   onChange={(event) => setSearchText(event.target.value)}
@@ -159,10 +161,10 @@ export default function FindYourChurchPage() {
 
             <div className="mt-6">
               <Link
-                href="/claim?manual=true"
+                href="/create-account"
                 className="inline-flex rounded-full border border-teal-300/20 bg-teal-300/10 px-5 py-3 text-sm font-bold text-teal-200 transition hover:bg-teal-300/20"
               >
-                Church not listed? Submit manually →
+                Church not listed? Create account →
               </Link>
             </div>
 
@@ -184,10 +186,10 @@ export default function FindYourChurchPage() {
                   </p>
 
                   <Link
-                    href="/claim?manual=true"
+                    href="/create-account"
                     className="mt-5 inline-flex rounded-full border border-teal-300/20 bg-teal-300/10 px-5 py-3 text-sm font-bold text-teal-200 transition hover:bg-teal-300/20"
                   >
-                    Church not listed? Submit manually →
+                    Church not listed? Create account →
                   </Link>
                 </div>
               )}
@@ -245,7 +247,7 @@ export default function FindYourChurchPage() {
                         <p className="mt-5 text-sm font-bold text-teal-200">
                           {church.source === 'supabase'
                             ? 'View profile →'
-                            : 'Start claim →'}
+                            : 'Create account →'}
                         </p>
                       </div>
                     </div>
