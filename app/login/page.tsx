@@ -4,6 +4,8 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
 
+type ProfileRole = 'admin' | 'church' | 'seeker'
+
 export default function Login() {
   const router = useRouter()
 
@@ -12,22 +14,97 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
 
+  function getErrorMessage(error: unknown) {
+    if (!error) return 'Something went wrong.'
+    if (typeof error === 'string') return error
+
+    if (
+      typeof error === 'object' &&
+      error !== null &&
+      'message' in error &&
+      typeof (error as { message?: unknown }).message === 'string'
+    ) {
+      return (error as { message: string }).message
+    }
+
+    return 'Unexpected error occurred.'
+  }
+
   async function handleLogin() {
     setIsLoading(true)
     setErrorMessage('')
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
+    const cleanEmail = email.trim().toLowerCase()
 
-    if (error) {
-      setErrorMessage(error.message)
+    if (!cleanEmail) {
+      setErrorMessage('Email is required.')
       setIsLoading(false)
       return
     }
 
-    router.push('/dashboard')
+    if (!password) {
+      setErrorMessage('Password is required.')
+      setIsLoading(false)
+      return
+    }
+
+    const { data: signInData, error: signInError } =
+      await supabase.auth.signInWithPassword({
+        email: cleanEmail,
+        password,
+      })
+
+    if (signInError) {
+      setErrorMessage(getErrorMessage(signInError))
+      setIsLoading(false)
+      return
+    }
+
+    const user = signInData.user
+
+    if (!user?.id) {
+      setErrorMessage('Login succeeded, but no user session was returned.')
+      setIsLoading(false)
+      return
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('id, email, role')
+      .eq('id', user.id)
+      .maybeSingle()
+
+    if (profileError) {
+      setErrorMessage(getErrorMessage(profileError))
+      setIsLoading(false)
+      return
+    }
+
+    if (!profile?.role) {
+      setErrorMessage('No profile role found for this account.')
+      setIsLoading(false)
+      return
+    }
+
+    const role = profile.role as ProfileRole
+
+    if (role === 'admin') {
+      router.replace('/admin')
+      return
+    }
+
+    if (role === 'church') {
+      router.replace('/dashboard')
+      return
+    }
+
+    if (role === 'seeker') {
+      router.replace('/')
+      return
+    }
+
+    setErrorMessage(`Unsupported account role: ${profile.role}`)
+    setIsLoading(false)
   }
 
   return (
@@ -36,20 +113,26 @@ export default function Login() {
 
       <div className="relative z-10 w-full max-w-md rounded-3xl border border-white/10 bg-white/5 p-8 backdrop-blur shadow-[0_0_60px_rgba(20,184,166,0.14)]">
         <div className="mb-8 text-center">
-          <h1 className="text-3xl font-black mb-3">church login</h1>
+          <h1 className="text-3xl font-black mb-3">Church login</h1>
           <p className="text-gray-400">
             Manage your Tribe Finder profile, messages, visits, photos, and plan.
           </p>
         </div>
 
-        <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
+        <form
+          className="space-y-4"
+          onSubmit={(event) => {
+            event.preventDefault()
+            handleLogin()
+          }}
+        >
           <div>
             <label className="text-sm text-gray-300">Email</label>
             <input
               type="email"
               placeholder="you@church.com"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(event) => setEmail(event.target.value)}
               className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white outline-none focus:border-teal-300"
             />
           </div>
@@ -60,7 +143,7 @@ export default function Login() {
               type="password"
               placeholder="••••••••"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(event) => setPassword(event.target.value)}
               className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white outline-none focus:border-teal-300"
             />
           </div>
@@ -72,8 +155,7 @@ export default function Login() {
           )}
 
           <button
-            type="button"
-            onClick={handleLogin}
+            type="submit"
             disabled={isLoading}
             className="w-full rounded-xl bg-teal-400 py-3 font-bold text-black hover:bg-teal-300 transition disabled:opacity-60"
           >
