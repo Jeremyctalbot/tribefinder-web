@@ -217,23 +217,74 @@ export default function LoginForm({
   ])
 
   async function handleLogin() {
-    setIsLoading(true)
-    setErrorMessage('')
-    setSuccessMessage('')
+  setIsLoading(true)
+  setErrorMessage('')
+  setSuccessMessage('')
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password,
-    })
+  const cleanEmail = email.trim().toLowerCase()
 
-    if (error) {
-      setErrorMessage(error.message)
-      setIsLoading(false)
-      return
-    }
+  const { error } = await supabase.auth.signInWithPassword({
+    email: cleanEmail,
+    password,
+  })
 
-    router.push('/dashboard')
+  if (error) {
+    setErrorMessage(error.message)
+    setIsLoading(false)
+    return
   }
+
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser()
+
+  if (userError || !user?.id) {
+    setErrorMessage(
+      userError?.message ||
+        'Unable to load authenticated user.'
+    )
+
+    setIsLoading(false)
+    return
+  }
+
+  const {
+    data: profile,
+    error: profileError,
+  } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .maybeSingle()
+
+  if (profileError) {
+    setErrorMessage(profileError.message)
+    setIsLoading(false)
+    return
+  }
+
+  if (profile?.role === 'admin') {
+    window.location.href = '/admin'
+    return
+  }
+
+  if (profile?.role === 'church') {
+    window.location.href = '/dashboard'
+    return
+  }
+
+  if (profile?.role === 'seeker') {
+    window.location.href = '/'
+    return
+  }
+
+  setErrorMessage(
+    'No valid account role was found.'
+  )
+
+  setIsLoading(false)
+}
 
   async function handleForgotPassword() {
     setErrorMessage('')
