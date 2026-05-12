@@ -347,6 +347,12 @@ export default function AdminPage() {
         </Link>
 
         <div className="flex items-center gap-3">
+            <Link
+        href="/admin/users"
+        className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-bold text-white/75 transition hover:bg-white/10"
+        >
+        Users
+        </Link>
           <Link
             href="/dashboard"
             className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-bold text-white/75 transition hover:bg-white/10"
