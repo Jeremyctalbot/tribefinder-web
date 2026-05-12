@@ -16,6 +16,7 @@ export default function Login() {
 
   function getErrorMessage(error: unknown) {
     if (!error) return 'Something went wrong.'
+
     if (typeof error === 'string') return error
 
     if (
@@ -48,11 +49,13 @@ export default function Login() {
       return
     }
 
-    const { data: signInData, error: signInError } =
-      await supabase.auth.signInWithPassword({
-        email: cleanEmail,
-        password,
-      })
+    const {
+      data: signInData,
+      error: signInError,
+    } = await supabase.auth.signInWithPassword({
+      email: cleanEmail,
+      password,
+    })
 
     if (signInError) {
       setErrorMessage(getErrorMessage(signInError))
@@ -63,12 +66,17 @@ export default function Login() {
     const user = signInData.user
 
     if (!user?.id) {
-      setErrorMessage('Login succeeded, but no user session was returned.')
+      setErrorMessage(
+        'Login succeeded, but no user session was returned.'
+      )
       setIsLoading(false)
       return
     }
 
-    const { data: profile, error: profileError } = await supabase
+    const {
+      data: profile,
+      error: profileError,
+    } = await supabase
       .from('profiles')
       .select('id, email, role')
       .eq('id', user.id)
@@ -81,7 +89,9 @@ export default function Login() {
     }
 
     if (!profile?.role) {
-      setErrorMessage('No profile role found for this account.')
+      setErrorMessage(
+        'No profile role found for this account.'
+      )
       setIsLoading(false)
       return
     }
@@ -89,21 +99,24 @@ export default function Login() {
     const role = profile.role as ProfileRole
 
     if (role === 'admin') {
-      router.replace('/admin')
+      window.location.href = '/admin'
       return
     }
 
     if (role === 'church') {
-      router.replace('/dashboard')
+      window.location.href = '/dashboard'
       return
     }
 
     if (role === 'seeker') {
-      router.replace('/')
+      window.location.href = '/'
       return
     }
 
-    setErrorMessage(`Unsupported account role: ${profile.role}`)
+    setErrorMessage(
+      `Unsupported account role: ${profile.role}`
+    )
+
     setIsLoading(false)
   }
 
@@ -113,9 +126,13 @@ export default function Login() {
 
       <div className="relative z-10 w-full max-w-md rounded-3xl border border-white/10 bg-white/5 p-8 backdrop-blur shadow-[0_0_60px_rgba(20,184,166,0.14)]">
         <div className="mb-8 text-center">
-          <h1 className="text-3xl font-black mb-3">Church login</h1>
+          <h1 className="text-3xl font-black mb-3">
+            Church login
+          </h1>
+
           <p className="text-gray-400">
-            Manage your Tribe Finder profile, messages, visits, photos, and plan.
+            Manage your Tribe Finder profile,
+            messages, visits, photos, and plan.
           </p>
         </div>
 
@@ -127,23 +144,33 @@ export default function Login() {
           }}
         >
           <div>
-            <label className="text-sm text-gray-300">Email</label>
+            <label className="text-sm text-gray-300">
+              Email
+            </label>
+
             <input
               type="email"
               placeholder="you@church.com"
               value={email}
-              onChange={(event) => setEmail(event.target.value)}
+              onChange={(event) =>
+                setEmail(event.target.value)
+              }
               className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white outline-none focus:border-teal-300"
             />
           </div>
 
           <div>
-            <label className="text-sm text-gray-300">Password</label>
+            <label className="text-sm text-gray-300">
+              Password
+            </label>
+
             <input
               type="password"
               placeholder="••••••••"
               value={password}
-              onChange={(event) => setPassword(event.target.value)}
+              onChange={(event) =>
+                setPassword(event.target.value)
+              }
               className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white outline-none focus:border-teal-300"
             />
           </div>
@@ -159,7 +186,9 @@ export default function Login() {
             disabled={isLoading}
             className="w-full rounded-xl bg-teal-400 py-3 font-bold text-black hover:bg-teal-300 transition disabled:opacity-60"
           >
-            {isLoading ? 'Logging in...' : 'Log in'}
+            {isLoading
+              ? 'Logging in...'
+              : 'Log in'}
           </button>
         </form>
       </div>
