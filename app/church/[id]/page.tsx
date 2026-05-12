@@ -97,7 +97,7 @@ export default async function ChurchPublicPage({
           </div>
         ) : (
           <Link
-            href={`/claim?church=${id}`}
+            href="/create-account"
             className="rounded-full bg-teal-300 px-4 py-2 text-sm font-bold text-black transition hover:bg-teal-200"
           >
             Claim this church
@@ -159,7 +159,7 @@ export default async function ChurchPublicPage({
                   </div>
                 ) : (
                   <Link
-                    href={`/claim?church=${id}`}
+                    href="/create-account"
                     className="rounded-xl border border-white/20 bg-black/30 px-6 py-3 text-center font-bold transition hover:bg-white/10"
                   >
                     Is this your church?
@@ -294,7 +294,7 @@ export default async function ChurchPublicPage({
                   </p>
 
                   <Link
-                    href={`/claim?church=${id}`}
+                    href="/create-account"
                     className="mt-5 block rounded-2xl bg-teal-300 px-5 py-3 text-center font-black text-black transition hover:bg-teal-200"
                   >
                     Claim this church
