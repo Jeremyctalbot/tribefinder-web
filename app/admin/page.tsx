@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import type { ReactNode } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import LoginForm from '../login/LoginForm'
@@ -10,6 +11,8 @@ type AdminProfile = {
   email: string | null
   role: string | null
 }
+
+type PendingSource = 'claim_request' | 'church_profile'
 
 type ChurchClaimRequest = {
   id: string
@@ -36,11 +39,51 @@ type ChurchClaimRequest = {
   distance_miles: number | null
 }
 
-const ADMIN_ACCESS_KEY =
-  process.env.NEXT_PUBLIC_ADMIN_ACCESS_KEY || ''
+type PendingChurchProfile = {
+  id: string
+  church_name: string | null
+  full_name: string | null
+  role_title: string | null
+  email: string | null
+  phone: string | null
+  website: string | null
+  address: string | null
+  city: string | null
+  state: string | null
+  zip_code: string | null
+  denomination: string | null
+  authority_explanation: string | null
+  verification_status: string | null
+}
 
-const ADMIN_GATE_STORAGE_KEY =
-  'tribe_finder_admin_gate_unlocked'
+type PendingVerificationItem = {
+  source: PendingSource
+  id: string
+  churchProfileId: string | null
+  userId: string | null
+  churchName: string | null
+  fullName: string | null
+  roleTitle: string | null
+  email: string | null
+  phone: string | null
+  website: string | null
+  address: string | null
+  city: string | null
+  state: string | null
+  zipCode: string | null
+  denomination: string | null
+  authorityExplanation: string | null
+  status: string | null
+  submittedAt: string | null
+  searchZipCode: string | null
+  latitude: number | null
+  longitude: number | null
+  distanceMiles: number | null
+}
+
+const ADMIN_ACCESS_KEY = process.env.NEXT_PUBLIC_ADMIN_ACCESS_KEY || ''
+
+const ADMIN_GATE_STORAGE_KEY = 'tribe_finder_admin_gate_unlocked'
 
 function formatDate(value?: string | null) {
   if (!value) return 'Unknown'
@@ -60,40 +103,79 @@ function display(value?: string | number | null) {
   return cleanValue.length > 0 ? cleanValue : '—'
 }
 
+function normalizeClaimRequest(claim: ChurchClaimRequest): PendingVerificationItem {
+  const linkedChurchId = claim.church_id || claim.claimed_church_id || claim.user_id
+
+  return {
+    source: 'claim_request',
+    id: claim.id,
+    churchProfileId: linkedChurchId,
+    userId: claim.user_id,
+    churchName: claim.church_name,
+    fullName: claim.full_name,
+    roleTitle: claim.role_title,
+    email: claim.church_email,
+    phone: claim.phone,
+    website: claim.website,
+    address: claim.address,
+    city: claim.city,
+    state: claim.state,
+    zipCode: claim.zip_code,
+    denomination: claim.denomination,
+    authorityExplanation: claim.authority_explanation,
+    status: claim.status,
+    submittedAt: claim.submitted_at,
+    searchZipCode: claim.search_zip_code,
+    latitude: claim.latitude,
+    longitude: claim.longitude,
+    distanceMiles: claim.distance_miles,
+  }
+}
+
+function normalizeChurchProfile(profile: PendingChurchProfile): PendingVerificationItem {
+  return {
+    source: 'church_profile',
+    id: profile.id,
+    churchProfileId: profile.id,
+    userId: profile.id,
+    churchName: profile.church_name,
+    fullName: profile.full_name,
+    roleTitle: profile.role_title,
+    email: profile.email,
+    phone: profile.phone,
+    website: profile.website,
+    address: profile.address,
+    city: profile.city,
+    state: profile.state,
+    zipCode: profile.zip_code,
+    denomination: profile.denomination,
+    authorityExplanation: profile.authority_explanation,
+    status: profile.verification_status,
+    submittedAt: null,
+    searchZipCode: profile.zip_code,
+    latitude: null,
+    longitude: null,
+    distanceMiles: null,
+  }
+}
+
 export default function AdminPage() {
-  const [adminProfile, setAdminProfile] =
-    useState<AdminProfile | null>(null)
-
-  const [claims, setClaims] = useState<
-    ChurchClaimRequest[]
-  >([])
-
+  const [adminProfile, setAdminProfile] = useState<AdminProfile | null>(null)
+  const [pendingItems, setPendingItems] = useState<PendingVerificationItem[]>([])
   const [loading, setLoading] = useState(true)
-
-  const [loadingClaims, setLoadingClaims] =
-    useState(false)
-
-  const [errorMessage, setErrorMessage] =
-    useState('')
-
-  const [gateChecking, setGateChecking] =
-    useState(true)
-
-  const [gateUnlocked, setGateUnlocked] =
-    useState(false)
-
-  const [adminPassword, setAdminPassword] =
-    useState('')
-
-  const [gateError, setGateError] =
-    useState('')
+  const [loadingPending, setLoadingPending] = useState(false)
+  const [actionLoadingId, setActionLoadingId] = useState('')
+  const [errorMessage, setErrorMessage] = useState('')
+  const [successMessage, setSuccessMessage] = useState('')
+  const [gateChecking, setGateChecking] = useState(true)
+  const [gateUnlocked, setGateUnlocked] = useState(false)
+  const [adminPassword, setAdminPassword] = useState('')
+  const [gateError, setGateError] = useState('')
 
   useEffect(() => {
     const unlocked =
       typeof window !== 'undefined' &&
-      window.sessionStorage.getItem(
-        ADMIN_GATE_STORAGE_KEY
-      ) === 'true'
+      window.sessionStorage.getItem(ADMIN_GATE_STORAGE_KEY) === 'true'
 
     setGateUnlocked(unlocked)
     setGateChecking(false)
@@ -105,6 +187,7 @@ export default function AdminPage() {
     async function loadAdmin() {
       setLoading(true)
       setErrorMessage('')
+      setSuccessMessage('')
 
       const {
         data: { user },
@@ -115,10 +198,7 @@ export default function AdminPage() {
         return
       }
 
-      const {
-        data: profile,
-        error: profileError,
-      } = await supabase
+      const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('id, email, role')
         .eq('id', user.id)
@@ -133,7 +213,7 @@ export default function AdminPage() {
       setAdminProfile(profile)
 
       if (profile?.role === 'admin') {
-        await loadPendingClaims()
+        await loadPendingVerifications()
       }
 
       setLoading(false)
@@ -146,32 +226,25 @@ export default function AdminPage() {
     setGateError('')
 
     if (!ADMIN_ACCESS_KEY) {
-      setGateError(
-        'Admin access key is not configured.'
-      )
+      setGateError('Admin access key is not configured.')
       return
     }
 
-    if (
-      adminPassword.trim() !== ADMIN_ACCESS_KEY
-    ) {
+    if (adminPassword.trim() !== ADMIN_ACCESS_KEY) {
       setGateError('Incorrect admin password.')
       return
     }
 
-    window.sessionStorage.setItem(
-      ADMIN_GATE_STORAGE_KEY,
-      'true'
-    )
-
+    window.sessionStorage.setItem(ADMIN_GATE_STORAGE_KEY, 'true')
     setGateUnlocked(true)
   }
 
-  async function loadPendingClaims() {
-    setLoadingClaims(true)
+  async function loadPendingVerifications() {
+    setLoadingPending(true)
     setErrorMessage('')
+    setSuccessMessage('')
 
-    const { data, error } = await supabase
+    const { data: claimData, error: claimError } = await supabase
       .from('church_claim_requests')
       .select(
         `
@@ -200,18 +273,145 @@ export default function AdminPage() {
       `
       )
       .eq('status', 'pending')
-      .order('submitted_at', {
-        ascending: false,
-      })
+      .order('submitted_at', { ascending: false })
 
-    if (error) {
-      setErrorMessage(error.message)
-      setLoadingClaims(false)
+    if (claimError) {
+      setErrorMessage(claimError.message)
+      setLoadingPending(false)
       return
     }
 
-    setClaims(data ?? [])
-    setLoadingClaims(false)
+    const { data: profileData, error: profileError } = await supabase
+      .from('church_profiles')
+      .select(
+        `
+        id,
+        church_name,
+        full_name,
+        role_title,
+        email,
+        phone,
+        website,
+        address,
+        city,
+        state,
+        zip_code,
+        denomination,
+        authority_explanation,
+        verification_status
+      `
+      )
+      .eq('verification_status', 'pending')
+      .order('church_name', { ascending: true })
+
+    if (profileError) {
+      setErrorMessage(profileError.message)
+      setLoadingPending(false)
+      return
+    }
+
+    const normalizedClaims = (claimData ?? []).map(normalizeClaimRequest)
+    const normalizedProfiles = (profileData ?? []).map(normalizeChurchProfile)
+
+    const seenKeys = new Set<string>()
+
+    const merged = [...normalizedClaims, ...normalizedProfiles].filter((item) => {
+      const key = `${item.source}-${item.id}`
+
+      if (seenKeys.has(key)) return false
+
+      seenKeys.add(key)
+      return true
+    })
+
+    setPendingItems(merged)
+    setLoadingPending(false)
+  }
+
+  async function approvePendingVerification(item: PendingVerificationItem) {
+    setActionLoadingId(item.id)
+    setErrorMessage('')
+    setSuccessMessage('')
+
+    if (item.source === 'claim_request') {
+      const { error: claimError } = await supabase
+        .from('church_claim_requests')
+        .update({ status: 'approved' })
+        .eq('id', item.id)
+
+      if (claimError) {
+        setErrorMessage(claimError.message)
+        setActionLoadingId('')
+        return
+      }
+    }
+
+    if (item.churchProfileId) {
+      const { error: profileError } = await supabase
+        .from('church_profiles')
+        .update({ verification_status: 'approved' })
+        .eq('id', item.churchProfileId)
+
+      if (profileError) {
+        setErrorMessage(profileError.message)
+        setActionLoadingId('')
+        return
+      }
+    }
+
+    if (item.userId && item.userId !== item.churchProfileId) {
+      await supabase
+        .from('church_profiles')
+        .update({ verification_status: 'approved' })
+        .eq('id', item.userId)
+    }
+
+    setSuccessMessage(`${display(item.churchName)} approved.`)
+    await loadPendingVerifications()
+    setActionLoadingId('')
+  }
+
+  async function rejectPendingVerification(item: PendingVerificationItem) {
+    setActionLoadingId(item.id)
+    setErrorMessage('')
+    setSuccessMessage('')
+
+    if (item.source === 'claim_request') {
+      const { error: claimError } = await supabase
+        .from('church_claim_requests')
+        .update({ status: 'rejected' })
+        .eq('id', item.id)
+
+      if (claimError) {
+        setErrorMessage(claimError.message)
+        setActionLoadingId('')
+        return
+      }
+    }
+
+    if (item.churchProfileId) {
+      const { error: profileError } = await supabase
+        .from('church_profiles')
+        .update({ verification_status: 'rejected' })
+        .eq('id', item.churchProfileId)
+
+      if (profileError) {
+        setErrorMessage(profileError.message)
+        setActionLoadingId('')
+        return
+      }
+    }
+
+    if (item.userId && item.userId !== item.churchProfileId) {
+      await supabase
+        .from('church_profiles')
+        .update({ verification_status: 'rejected' })
+        .eq('id', item.userId)
+    }
+
+    setSuccessMessage(`${display(item.churchName)} rejected.`)
+    await loadPendingVerifications()
+    setActionLoadingId('')
   }
 
   if (gateChecking) {
@@ -237,8 +437,7 @@ export default function AdminPage() {
           </h1>
 
           <p className="mt-3 text-sm leading-6 text-white/60">
-            Enter the admin access password before
-            continuing.
+            Enter the admin access password before continuing.
           </p>
 
           <div className="mt-6">
@@ -250,11 +449,7 @@ export default function AdminPage() {
               <input
                 type="password"
                 value={adminPassword}
-                onChange={(event) =>
-                  setAdminPassword(
-                    event.target.value
-                  )
-                }
+                onChange={(event) => setAdminPassword(event.target.value)}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter') {
                     handleGateSubmit()
@@ -319,8 +514,7 @@ export default function AdminPage() {
           </h1>
 
           <p className="mt-4 text-white/70">
-            Your account is signed in, but it does
-            not have admin permissions.
+            Your account is signed in, but it does not have admin permissions.
           </p>
 
           <Link
@@ -339,20 +533,18 @@ export default function AdminPage() {
       <div className="fixed inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(20,184,166,0.18),_transparent_32%),radial-gradient(circle_at_bottom_right,_rgba(59,130,246,0.16),_transparent_34%)]" />
 
       <nav className="relative z-10 flex items-center justify-between px-6 py-6">
-        <Link
-          href="/"
-          className="text-xl font-black"
-        >
+        <Link href="/" className="text-xl font-black">
           Tribe Finder
         </Link>
 
         <div className="flex items-center gap-3">
-            <Link
-        href="/admin/users"
-        className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-bold text-white/75 transition hover:bg-white/10"
-        >
-        Users
-        </Link>
+          <Link
+            href="/admin/users"
+            className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-bold text-white/75 transition hover:bg-white/10"
+          >
+            Users
+          </Link>
+
           <Link
             href="/dashboard"
             className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-bold text-white/75 transition hover:bg-white/10"
@@ -362,20 +554,17 @@ export default function AdminPage() {
 
           <button
             type="button"
-            onClick={loadPendingClaims}
-            disabled={loadingClaims}
+            onClick={loadPendingVerifications}
+            disabled={loadingPending}
             className="rounded-full bg-teal-400 px-4 py-2 text-sm font-black text-black transition hover:bg-teal-300 disabled:opacity-60"
           >
-            {loadingClaims
-              ? 'Refreshing...'
-              : 'Refresh'}
+            {loadingPending ? 'Refreshing...' : 'Refresh'}
           </button>
         </div>
       </nav>
 
       <section className="relative z-10 mx-auto max-w-7xl px-6 pb-16 pt-8">
         <div className="grid gap-6">
-
           <PasswordResetPanel />
 
           <div className="rounded-[2rem] border border-white/10 bg-white/[0.06] p-6 shadow-2xl backdrop-blur-xl md:p-8">
@@ -386,23 +575,22 @@ export default function AdminPage() {
                 </p>
 
                 <h1 className="mt-3 text-4xl font-black tracking-tight md:text-5xl">
-                  Church claim requests
+                  Church verification
                 </h1>
 
                 <p className="mt-4 max-w-3xl text-white/60">
-                  Review pending church claims
-                  before granting dashboard
-                  access.
+                  Review pending claim requests and direct church profile
+                  submissions before granting dashboard access.
                 </p>
               </div>
 
               <div className="rounded-3xl border border-teal-300/20 bg-teal-300/10 px-6 py-4">
                 <p className="text-sm font-bold text-teal-100">
-                  Pending Claims
+                  Pending Verifications
                 </p>
 
                 <p className="mt-1 text-4xl font-black text-white">
-                  {claims.length}
+                  {pendingItems.length}
                 </p>
               </div>
             </div>
@@ -413,28 +601,37 @@ export default function AdminPage() {
               </div>
             )}
 
+            {successMessage && (
+              <div className="mt-6 rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-4 text-emerald-100">
+                {successMessage}
+              </div>
+            )}
+
             <div className="mt-8">
-              {loadingClaims ? (
+              {loadingPending ? (
                 <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center text-white/60">
-                  Loading claims...
+                  Loading pending verifications...
                 </div>
-              ) : claims.length === 0 ? (
+              ) : pendingItems.length === 0 ? (
                 <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center">
                   <h2 className="text-2xl font-black">
-                    No pending claims
+                    No pending verifications
                   </h2>
 
                   <p className="mt-2 text-white/55">
-                    New church claim requests
-                    will appear here.
+                    New church claim requests and pending church profiles will
+                    appear here.
                   </p>
                 </div>
               ) : (
                 <div className="grid gap-5">
-                  {claims.map((claim) => (
-                    <ClaimCard
-                      key={claim.id}
-                      claim={claim}
+                  {pendingItems.map((item) => (
+                    <VerificationCard
+                      key={`${item.source}-${item.id}`}
+                      item={item}
+                      actionLoadingId={actionLoadingId}
+                      onApprove={approvePendingVerification}
+                      onReject={rejectPendingVerification}
                     />
                   ))}
                 </div>
@@ -450,12 +647,8 @@ export default function AdminPage() {
 function PasswordResetPanel() {
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
-
-  const [successMessage, setSuccessMessage] =
-    useState('')
-
-  const [errorMessage, setErrorMessage] =
-    useState('')
+  const [successMessage, setSuccessMessage] = useState('')
+  const [errorMessage, setErrorMessage] = useState('')
 
   async function sendResetLink() {
     setLoading(true)
@@ -465,22 +658,14 @@ function PasswordResetPanel() {
     const cleanEmail = email.trim().toLowerCase()
 
     if (!cleanEmail) {
-      setErrorMessage(
-        'Enter an email address.'
-      )
-
+      setErrorMessage('Enter an email address.')
       setLoading(false)
       return
     }
 
-    const { error } =
-      await supabase.auth.resetPasswordForEmail(
-        cleanEmail,
-        {
-          redirectTo:
-            'https://tribefinderapp.co/reset-password',
-        }
-      )
+    const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
+      redirectTo: 'https://tribefinderapp.co/reset-password',
+    })
 
     if (error) {
       setErrorMessage(error.message)
@@ -488,10 +673,7 @@ function PasswordResetPanel() {
       return
     }
 
-    setSuccessMessage(
-      `Password reset email sent to ${cleanEmail}`
-    )
-
+    setSuccessMessage(`Password reset email sent to ${cleanEmail}`)
     setEmail('')
     setLoading(false)
   }
@@ -509,9 +691,8 @@ function PasswordResetPanel() {
           </h2>
 
           <p className="mt-3 max-w-2xl text-sm leading-6 text-white/60">
-            Send an official Supabase password
-            reset email directly from the admin
-            dashboard.
+            Send an official Supabase password reset email directly from the
+            admin dashboard.
           </p>
         </div>
       </div>
@@ -520,9 +701,7 @@ function PasswordResetPanel() {
         <input
           type="email"
           value={email}
-          onChange={(event) =>
-            setEmail(event.target.value)
-          }
+          onChange={(event) => setEmail(event.target.value)}
           placeholder="church@example.com"
           className="rounded-2xl border border-white/10 bg-black/30 px-5 py-4 text-white outline-none transition focus:border-cyan-300"
         />
@@ -533,9 +712,7 @@ function PasswordResetPanel() {
           disabled={loading}
           className="rounded-2xl bg-cyan-400 px-6 py-4 font-black text-black transition hover:bg-cyan-300 disabled:opacity-60"
         >
-          {loading
-            ? 'Sending...'
-            : 'Send Reset Link'}
+          {loading ? 'Sending...' : 'Send Reset Link'}
         </button>
       </div>
 
@@ -554,144 +731,105 @@ function PasswordResetPanel() {
   )
 }
 
-function ClaimCard({
-  claim,
+function VerificationCard({
+  item,
+  actionLoadingId,
+  onApprove,
+  onReject,
 }: {
-  claim: ChurchClaimRequest
+  item: PendingVerificationItem
+  actionLoadingId: string
+  onApprove: (item: PendingVerificationItem) => void
+  onReject: (item: PendingVerificationItem) => void
 }) {
-  const linkedChurchId =
-    claim.church_id || claim.claimed_church_id
+  const isLoading = actionLoadingId === item.id
 
   return (
     <article className="rounded-3xl border border-white/10 bg-black/25 p-5 shadow-xl backdrop-blur">
       <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-full border border-yellow-300/20 bg-yellow-300/10 px-3 py-1 text-xs font-black uppercase tracking-[0.16em] text-yellow-100">
-              {display(claim.status)}
-            </span>
+            <Badge tone="yellow">
+              {display(item.status)}
+            </Badge>
 
-            {claim.user_id ? (
-              <span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-1 text-xs font-black uppercase tracking-[0.16em] text-emerald-100">
+            <Badge tone={item.source === 'claim_request' ? 'cyan' : 'teal'}>
+              {item.source === 'claim_request'
+                ? 'Claim Request'
+                : 'Church Profile'}
+            </Badge>
+
+            {item.userId ? (
+              <Badge tone="emerald">
                 Auth linked
-              </span>
+              </Badge>
             ) : (
-              <span className="rounded-full border border-red-300/20 bg-red-300/10 px-3 py-1 text-xs font-black uppercase tracking-[0.16em] text-red-100">
+              <Badge tone="red">
                 No user id
-              </span>
+              </Badge>
             )}
           </div>
 
           <h2 className="mt-4 text-2xl font-black tracking-tight">
-            {display(claim.church_name)}
+            {display(item.churchName)}
           </h2>
 
           <p className="mt-2 text-sm text-white/45">
-            Submitted{' '}
-            {formatDate(claim.submitted_at)}
+            Submitted {formatDate(item.submittedAt)}
           </p>
         </div>
 
-        <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/55">
-          <p>
-            <span className="font-bold text-white/80">
-              Claim ID:
-            </span>{' '}
-            {claim.id}
-          </p>
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <button
+            type="button"
+            onClick={() => onReject(item)}
+            disabled={isLoading}
+            className="rounded-2xl border border-red-300/25 bg-red-400/10 px-5 py-3 text-sm font-black text-red-100 transition hover:bg-red-400/20 disabled:opacity-50"
+          >
+            {isLoading ? 'Working...' : 'Reject'}
+          </button>
 
-          <p className="mt-1">
-            <span className="font-bold text-white/80">
-              Church ID:
-            </span>{' '}
-            {display(linkedChurchId)}
-          </p>
-
-          <p className="mt-1">
-            <span className="font-bold text-white/80">
-              User ID:
-            </span>{' '}
-            {display(claim.user_id)}
-          </p>
+          <button
+            type="button"
+            onClick={() => onApprove(item)}
+            disabled={isLoading}
+            className="rounded-2xl bg-teal-400 px-5 py-3 text-sm font-black text-black transition hover:bg-teal-300 disabled:opacity-50"
+          >
+            {isLoading ? 'Working...' : 'Approve'}
+          </button>
         </div>
       </div>
 
-      <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <InfoBlock
-          label="Requester"
-          value={claim.full_name}
-        />
-
-        <InfoBlock
-          label="Role / Title"
-          value={claim.role_title}
-        />
-
-        <InfoBlock
-          label="Email"
-          value={claim.church_email}
-        />
-
-        <InfoBlock
-          label="Phone"
-          value={claim.phone}
-        />
+      <div className="mt-6 grid gap-4 md:grid-cols-3">
+        <InfoBlock label="Record ID" value={item.id} />
+        <InfoBlock label="Church Profile ID" value={item.churchProfileId} />
+        <InfoBlock label="User ID" value={item.userId} />
       </div>
 
       <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <InfoBlock
-          label="Website"
-          value={claim.website}
-        />
-
-        <InfoBlock
-          label="Denomination"
-          value={claim.denomination}
-        />
-
-        <InfoBlock
-          label="Search ZIP"
-          value={claim.search_zip_code}
-        />
-
-        <InfoBlock
-          label="Distance"
-          value={claim.distance_miles}
-        />
+        <InfoBlock label="Requester" value={item.fullName} />
+        <InfoBlock label="Role / Title" value={item.roleTitle} />
+        <InfoBlock label="Email" value={item.email} />
+        <InfoBlock label="Phone" value={item.phone} />
       </div>
 
       <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <InfoBlock
-          label="Address"
-          value={claim.address}
-        />
+        <InfoBlock label="Website" value={item.website} />
+        <InfoBlock label="Denomination" value={item.denomination} />
+        <InfoBlock label="Search ZIP" value={item.searchZipCode} />
+        <InfoBlock label="Distance" value={item.distanceMiles} />
+      </div>
 
-        <InfoBlock
-          label="City"
-          value={claim.city}
-        />
-
-        <InfoBlock
-          label="State"
-          value={claim.state}
-        />
-
-        <InfoBlock
-          label="ZIP Code"
-          value={claim.zip_code}
-        />
+      <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <InfoBlock label="Address" value={item.address} />
+        <InfoBlock label="City" value={item.city} />
+        <InfoBlock label="State" value={item.state} />
+        <InfoBlock label="ZIP Code" value={item.zipCode} />
       </div>
 
       <div className="mt-4 grid gap-4 md:grid-cols-2">
-        <InfoBlock
-          label="Latitude"
-          value={claim.latitude}
-        />
-
-        <InfoBlock
-          label="Longitude"
-          value={claim.longitude}
-        />
+        <InfoBlock label="Latitude" value={item.latitude} />
+        <InfoBlock label="Longitude" value={item.longitude} />
       </div>
 
       <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.035] p-4">
@@ -700,12 +838,34 @@ function ClaimCard({
         </p>
 
         <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-white/75">
-          {display(
-            claim.authority_explanation
-          )}
+          {display(item.authorityExplanation)}
         </p>
       </div>
     </article>
+  )
+}
+
+function Badge({
+  tone,
+  children,
+}: {
+  tone: 'yellow' | 'cyan' | 'teal' | 'emerald' | 'red'
+  children: ReactNode
+}) {
+  const styles = {
+    yellow: 'border-yellow-300/20 bg-yellow-300/10 text-yellow-100',
+    cyan: 'border-cyan-300/20 bg-cyan-300/10 text-cyan-100',
+    teal: 'border-teal-300/20 bg-teal-300/10 text-teal-100',
+    emerald: 'border-emerald-300/20 bg-emerald-300/10 text-emerald-100',
+    red: 'border-red-300/20 bg-red-300/10 text-red-100',
+  }
+
+  return (
+    <span
+      className={`rounded-full border px-3 py-1 text-xs font-black uppercase tracking-[0.16em] ${styles[tone]}`}
+    >
+      {children}
+    </span>
   )
 }
 
