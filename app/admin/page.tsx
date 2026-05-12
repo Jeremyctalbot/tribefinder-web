@@ -13,18 +13,27 @@ type AdminProfile = {
 
 type ChurchClaimRequest = {
   id: string
-  church_id: string | null
   user_id: string | null
+  claimed_church_id: string | null
+  church_id: string | null
   church_name: string | null
   full_name: string | null
   role_title: string | null
   church_email: string | null
   phone: string | null
   website: string | null
+  address: string | null
+  city: string | null
+  state: string | null
+  zip_code: string | null
+  denomination: string | null
   authority_explanation: string | null
   status: string | null
   submitted_at: string | null
-  created_at: string | null
+  search_zip_code: string | null
+  latitude: number | null
+  longitude: number | null
+  distance_miles: number | null
 }
 
 const ADMIN_ACCESS_KEY = process.env.NEXT_PUBLIC_ADMIN_ACCESS_KEY || ''
@@ -32,17 +41,15 @@ const ADMIN_GATE_STORAGE_KEY = 'tribe_finder_admin_gate_unlocked'
 
 function formatDate(value?: string | null) {
   if (!value) return 'Unknown'
-
   const date = new Date(value)
-
   if (Number.isNaN(date.getTime())) return 'Unknown'
-
   return date.toLocaleString()
 }
 
-function display(value?: string | null) {
-  const cleanValue = value?.trim()
-  return cleanValue && cleanValue.length > 0 ? cleanValue : '—'
+function display(value?: string | number | null) {
+  if (value === null || value === undefined) return '—'
+  const cleanValue = String(value).trim()
+  return cleanValue.length > 0 ? cleanValue : '—'
 }
 
 export default function AdminPage() {
@@ -132,18 +139,27 @@ export default function AdminPage() {
       .select(
         `
         id,
-        church_id,
         user_id,
+        claimed_church_id,
+        church_id,
         church_name,
         full_name,
         role_title,
         church_email,
         phone,
         website,
+        address,
+        city,
+        state,
+        zip_code,
+        denomination,
         authority_explanation,
         status,
         submitted_at,
-        created_at
+        search_zip_code,
+        latitude,
+        longitude,
+        distance_miles
       `
       )
       .eq('status', 'pending')
@@ -355,7 +371,7 @@ export default function AdminPage() {
 }
 
 function ClaimCard({ claim }: { claim: ChurchClaimRequest }) {
-  const explanation = claim.authority_explanation
+  const linkedChurchId = claim.church_id || claim.claimed_church_id
 
   return (
     <article className="rounded-3xl border border-white/10 bg-black/25 p-5 shadow-xl backdrop-blur">
@@ -382,7 +398,7 @@ function ClaimCard({ claim }: { claim: ChurchClaimRequest }) {
           </h2>
 
           <p className="mt-2 text-sm text-white/45">
-            Submitted {formatDate(claim.submitted_at || claim.created_at)}
+            Submitted {formatDate(claim.submitted_at)}
           </p>
         </div>
 
@@ -393,7 +409,7 @@ function ClaimCard({ claim }: { claim: ChurchClaimRequest }) {
           </p>
           <p className="mt-1">
             <span className="font-bold text-white/80">Church ID:</span>{' '}
-            {display(claim.church_id)}
+            {display(linkedChurchId)}
           </p>
           <p className="mt-1">
             <span className="font-bold text-white/80">User ID:</span>{' '}
@@ -409,17 +425,32 @@ function ClaimCard({ claim }: { claim: ChurchClaimRequest }) {
         <InfoBlock label="Phone" value={claim.phone} />
       </div>
 
-      <div className="mt-4 grid gap-4 md:grid-cols-2">
+      <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <InfoBlock label="Website" value={claim.website} />
+        <InfoBlock label="Denomination" value={claim.denomination} />
+        <InfoBlock label="Search ZIP" value={claim.search_zip_code} />
+        <InfoBlock label="Distance" value={claim.distance_miles} />
+      </div>
 
-        <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-4">
-          <p className="text-xs font-black uppercase tracking-[0.16em] text-white/35">
-            Authority Explanation
-          </p>
-          <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-white/75">
-            {display(explanation)}
-          </p>
-        </div>
+      <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <InfoBlock label="Address" value={claim.address} />
+        <InfoBlock label="City" value={claim.city} />
+        <InfoBlock label="State" value={claim.state} />
+        <InfoBlock label="ZIP Code" value={claim.zip_code} />
+      </div>
+
+      <div className="mt-4 grid gap-4 md:grid-cols-2">
+        <InfoBlock label="Latitude" value={claim.latitude} />
+        <InfoBlock label="Longitude" value={claim.longitude} />
+      </div>
+
+      <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.035] p-4">
+        <p className="text-xs font-black uppercase tracking-[0.16em] text-white/35">
+          Authority Explanation
+        </p>
+        <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-white/75">
+          {display(claim.authority_explanation)}
+        </p>
       </div>
     </article>
   )
@@ -430,7 +461,7 @@ function InfoBlock({
   value,
 }: {
   label: string
-  value?: string | null
+  value?: string | number | null
 }) {
   return (
     <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-4">
