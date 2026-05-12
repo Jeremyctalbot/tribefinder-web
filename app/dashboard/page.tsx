@@ -553,7 +553,7 @@ export default function Dashboard() {
       .select('event_name')
       .eq('subject_church_id', churchId)
       .in('event_name', eventNames)
-      .gte('created_at', since)
+      .gte('submitted_at', since)
 
     if (error) {
       console.error('Analytics load error:', error)
