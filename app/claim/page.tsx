@@ -519,44 +519,30 @@ function ClaimPageContent() {
       .join(', ')
 
     const { error: claimError } = await supabase
-      .from('church_claim_requests')
-      .insert({
-        user_id: user.id,
-        claimed_church_id: null,
-        church_id: null,
-        church_name: cleanChurchName,
-        full_name: clean(fullName),
-        role_title: clean(roleTitle),
-        church_email: clean(churchEmail),
-        phone: clean(phone),
-        website: clean(website),
-        address: clean(address),
-        city: clean(city),
-        state: clean(stateValue),
-        zip_code: clean(zipCode),
-        denomination: clean(denomination),
-        authority_explanation: [
-          clean(authorityExplanation),
-          '',
-          `Worship Style: ${worshipStyle}`,
-          `Weekly Attendance: ${weeklyAttendance}`,
-          `Atmosphere: ${atmosphere}`,
-          `Service Schedule: ${scheduleText}`,
-          `Target Life Stages: ${lifeStages.join(', ') || 'None selected'}`,
-          `Kids Ministry: ${kidsMinistry ? 'Yes' : 'No'}`,
-          `Youth Ministry: ${youthMinistry ? 'Yes' : 'No'}`,
-          `Small Groups: ${smallGroups ? 'Yes' : 'No'}`,
-          `Ministry Tags: ${ministryTags.join(', ') || 'None selected'}`,
-          `Newcomer Features: ${newcomerFeatures.join(', ') || 'None selected'}`,
-          `Serving Focuses: ${servingFocuses.join(', ') || 'None selected'}`,
-        ].join('\n'),
-        status: 'pending',
-        submitted_at: new Date().toISOString(),
-        search_zip_code: clean(zipSearch || zipCode),
-        latitude: selectedChurch?.latitude ?? null,
-        longitude: selectedChurch?.longitude ?? null,
-        distance_miles: selectedChurch?.distance_miles ?? null,
-      })
+  .from('church_claim_requests')
+  .insert({
+    user_id: user.id,
+    claimed_church_id: null,
+    church_id: null,
+    church_name: cleanChurchName,
+    full_name: clean(fullName),
+    role_title: clean(roleTitle),
+    church_email: clean(churchEmail),
+    phone: clean(phone),
+    website: clean(website),
+    address: clean(address),
+    city: clean(city),
+    state: clean(stateValue),
+    zip_code: clean(zipCode),
+    denomination: clean(denomination),
+    authority_explanation: clean(authorityExplanation),
+    status: 'pending',
+    submitted_at: new Date().toISOString(),
+    search_zip_code: clean(zipSearch || zipCode),
+    latitude: selectedChurch?.latitude ?? null,
+    longitude: selectedChurch?.longitude ?? null,
+    distance_miles: selectedChurch?.distance_miles ?? null,
+  })
 
     if (claimError) {
       setErrorMessage(
