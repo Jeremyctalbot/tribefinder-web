@@ -1,5 +1,3 @@
-// app/verify-email/page.tsx
-
 'use client'
 
 import { Suspense, useEffect, useState } from 'react'
@@ -11,14 +9,28 @@ function VerifyEmailContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
-  const email = searchParams.get('email') || ''
+  const emailFromUrl = searchParams.get('email') || ''
   const next = searchParams.get('next') || '/claim'
 
+  const [cachedEmail, setCachedEmail] = useState(emailFromUrl)
   const [checking, setChecking] = useState(false)
   const [statusMessage, setStatusMessage] = useState(
-    'Confirm your email, then return here. This page will send you forward once your account is active.'
+    'Confirm your email, then return here. This page will send you forward once your email is verified.'
   )
   const [errorMessage, setErrorMessage] = useState('')
+
+  const email = cachedEmail
+
+  useEffect(() => {
+    if (emailFromUrl) {
+      window.sessionStorage.setItem('tribe_pending_email', emailFromUrl)
+      setCachedEmail(emailFromUrl)
+      return
+    }
+
+    const storedEmail = window.sessionStorage.getItem('tribe_pending_email') || ''
+    setCachedEmail(storedEmail)
+  }, [emailFromUrl])
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -29,7 +41,7 @@ function VerifyEmailContent() {
 
     return () => window.clearInterval(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [email])
 
   async function ensureProfile() {
     const {
@@ -74,11 +86,26 @@ function VerifyEmailContent() {
 
     const {
       data: { user },
+      error,
     } = await supabase.auth.getUser()
+
+    if (error) {
+      setErrorMessage(error.message)
+      if (showCheckingState) setChecking(false)
+      return
+    }
 
     if (!user?.id) {
       setStatusMessage(
-        'Still waiting on email confirmation. Open the confirmation link from your inbox, then this page will continue.'
+        'Still waiting on email confirmation. Open the confirmation link from your inbox, then return here.'
+      )
+      if (showCheckingState) setChecking(false)
+      return
+    }
+
+    if (!user.email_confirmed_at) {
+      setStatusMessage(
+        'Your account exists, but the email is not verified yet. Click the confirmation link in your inbox before continuing.'
       )
       if (showCheckingState) setChecking(false)
       return
@@ -91,6 +118,7 @@ function VerifyEmailContent() {
       return
     }
 
+    window.sessionStorage.removeItem('tribe_pending_email')
     setStatusMessage('Email confirmed. Redirecting...')
     router.replace(next)
   }
@@ -109,7 +137,9 @@ function VerifyEmailContent() {
       type: 'signup',
       email,
       options: {
-        emailRedirectTo: `${window.location.origin}/verify-email?next=${encodeURIComponent(next)}`,
+        emailRedirectTo: `${window.location.origin}/verify-email?email=${encodeURIComponent(
+          email
+        )}&next=${encodeURIComponent(next)}`,
       },
     })
 
@@ -119,6 +149,7 @@ function VerifyEmailContent() {
       return
     }
 
+    window.sessionStorage.setItem('tribe_pending_email', email)
     setStatusMessage(`Confirmation email resent to ${email}.`)
     setChecking(false)
   }
