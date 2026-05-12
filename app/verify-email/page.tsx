@@ -1,3 +1,5 @@
+// app/verify-email/page.tsx
+
 'use client'
 
 import { Suspense, useEffect, useState } from 'react'
@@ -36,19 +38,24 @@ function VerifyEmailContent() {
 
     if (!user?.id) return false
 
-    const fullName =
-      typeof user.user_metadata?.full_name === 'string'
-        ? user.user_metadata.full_name
+    const firstName =
+      typeof user.user_metadata?.first_name === 'string'
+        ? user.user_metadata.first_name
         : ''
 
-    const role =
-      user.user_metadata?.role === 'seeker' ? 'seeker' : 'church'
+    const lastName =
+      typeof user.user_metadata?.last_name === 'string'
+        ? user.user_metadata.last_name
+        : ''
+
+    const role = user.user_metadata?.role === 'seeker' ? 'seeker' : 'church'
 
     const { error } = await supabase.from('profiles').upsert({
       id: user.id,
       email: user.email ?? email,
       role,
-      full_name: fullName,
+      first_name: firstName,
+      last_name: lastName,
       created_at: new Date().toISOString(),
     })
 

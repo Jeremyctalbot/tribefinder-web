@@ -1,3 +1,5 @@
+// app/create-account/page.tsx
+
 'use client'
 
 import { useState } from 'react'
@@ -14,7 +16,8 @@ export default function CreateAccountPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [fullName, setFullName] = useState('')
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
 
@@ -23,10 +26,17 @@ export default function CreateAccountPage() {
     setErrorMessage('')
 
     const cleanEmail = email.trim().toLowerCase()
-    const cleanFullName = fullName.trim()
+    const cleanFirstName = firstName.trim()
+    const cleanLastName = lastName.trim()
 
-    if (!cleanFullName) {
-      setErrorMessage('Full name is required.')
+    if (!cleanFirstName) {
+      setErrorMessage('First name is required.')
+      setIsSubmitting(false)
+      return
+    }
+
+    if (!cleanLastName) {
+      setErrorMessage('Last name is required.')
       setIsSubmitting(false)
       return
     }
@@ -49,12 +59,16 @@ export default function CreateAccountPage() {
       return
     }
 
+    const nextPath = role === 'church' ? '/claim' : '/'
+
     const { data, error } = await supabase.auth.signUp({
       email: cleanEmail,
       password,
       options: {
+        emailRedirectTo: `${window.location.origin}/verify-email?next=${encodeURIComponent(nextPath)}`,
         data: {
-          full_name: cleanFullName,
+          first_name: cleanFirstName,
+          last_name: cleanLastName,
           role,
         },
       },
@@ -66,33 +80,26 @@ export default function CreateAccountPage() {
       return
     }
 
-    const user = data.user
+    if (data.user?.id && data.session) {
+      const { error: profileError } = await supabase.from('profiles').upsert({
+        id: data.user.id,
+        email: cleanEmail,
+        role,
+        first_name: cleanFirstName,
+        last_name: cleanLastName,
+        created_at: new Date().toISOString(),
+      })
 
-    if (!user?.id) {
-      router.push('/login')
-      return
+      if (profileError) {
+        setErrorMessage(profileError.message)
+        setIsSubmitting(false)
+        return
+      }
     }
 
-    const { error: profileError } = await supabase.from('profiles').upsert({
-      id: user.id,
-      email: cleanEmail,
-      role,
-      full_name: cleanFullName,
-      created_at: new Date().toISOString(),
-    })
-
-    if (profileError) {
-      setErrorMessage(profileError.message)
-      setIsSubmitting(false)
-      return
-    }
-
-    if (role === 'church') {
-      router.push('/claim')
-      return
-    }
-
-    router.push('/')
+    router.push(
+      `/verify-email?email=${encodeURIComponent(cleanEmail)}&next=${encodeURIComponent(nextPath)}`
+    )
   }
 
   return (
@@ -119,11 +126,11 @@ export default function CreateAccountPage() {
           </p>
 
           <h1 className="mt-3 text-4xl font-black tracking-tight md:text-5xl">
-            join Tribe Finder
+            Join Tribe Finder
           </h1>
 
           <p className="mt-4 text-white/65">
-            Create your account first, then continue into the church claim and verification flow.
+            Create your login first. After confirming your email, churches continue into the claim and verification flow.
           </p>
 
           {errorMessage && (
@@ -169,32 +176,14 @@ export default function CreateAccountPage() {
               </div>
             </div>
 
-            <Input
-              label="Full Name"
-              value={fullName}
-              onChange={setFullName}
-            />
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+              <Input label="First Name" value={firstName} onChange={setFirstName} />
+              <Input label="Last Name" value={lastName} onChange={setLastName} />
+            </div>
 
-            <Input
-              label="Email"
-              type="email"
-              value={email}
-              onChange={setEmail}
-            />
-
-            <Input
-              label="Password"
-              type="password"
-              value={password}
-              onChange={setPassword}
-            />
-
-            <Input
-              label="Confirm Password"
-              type="password"
-              value={confirmPassword}
-              onChange={setConfirmPassword}
-            />
+            <Input label="Email" type="email" value={email} onChange={setEmail} />
+            <Input label="Password" type="password" value={password} onChange={setPassword} />
+            <Input label="Confirm Password" type="password" value={confirmPassword} onChange={setConfirmPassword} />
 
             <button
               type="button"
