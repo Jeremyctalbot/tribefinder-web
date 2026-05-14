@@ -316,85 +316,50 @@ export default function AdminPage() {
   }
 
   async function approvePendingVerification(item: PendingVerificationItem) {
-    setActionLoadingId(item.id)
-    setErrorMessage('')
-    setSuccessMessage('')
+  setActionLoadingId(item.id)
+  setErrorMessage('')
+  setSuccessMessage('')
 
-    if (!item.userId) {
-      setErrorMessage('This pending request does not have a user_id, so it cannot be approved yet.')
+  if (!item.userId) {
+    setErrorMessage('This pending request does not have a user_id, so it cannot be approved yet.')
+    setActionLoadingId('')
+    return
+  }
+
+  const { error: profileError } = await supabase
+    .from('church_profiles')
+    .update({
+      verification_status: 'approved',
+      onboarding_complete: true,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', item.userId)
+
+  if (profileError) {
+    setErrorMessage(profileError.message)
+    setActionLoadingId('')
+    return
+  }
+
+  if (item.source === 'claim_request') {
+    const { error: claimError } = await supabase
+      .from('church_claim_requests')
+      .update({
+        status: 'approved',
+      })
+      .eq('id', item.id)
+
+    if (claimError) {
+      setErrorMessage(claimError.message)
       setActionLoadingId('')
       return
     }
-
-    if (item.source === 'claim_request') {
-      const { error: churchProfileError } = await supabase
-        .from('church_profiles')
-        .upsert(
-          {
-            id: item.userId,
-            church_name: item.churchName,
-            full_name: item.fullName,
-            role_title: item.roleTitle,
-            email: item.email,
-            phone: item.phone,
-            website: item.website,
-            address: item.address,
-            city: item.city,
-            state: item.state,
-            zip_code: item.zipCode,
-            denomination: item.denomination,
-            authority_explanation: item.authorityExplanation,
-            verification_status: 'approved',
-            onboarding_complete: true,
-            subscription_tier: 'tier1',
-            latitude: item.latitude,
-            longitude: item.longitude,
-          },
-          { onConflict: 'id' }
-        )
-
-      if (churchProfileError) {
-        setErrorMessage(churchProfileError.message)
-        setActionLoadingId('')
-        return
-      }
-
-      const { error: claimError } = await supabase
-        .from('church_claim_requests')
-        .update({
-          status: 'approved',
-          church_id: item.userId,
-          claimed_church_id: item.userId,
-        })
-        .eq('id', item.id)
-
-      if (claimError) {
-        setErrorMessage(claimError.message)
-        setActionLoadingId('')
-        return
-      }
-    }
-
-    if (item.source === 'church_profile') {
-      const { error: profileError } = await supabase
-        .from('church_profiles')
-        .update({
-          verification_status: 'approved',
-          onboarding_complete: true,
-        })
-        .eq('id', item.userId)
-
-      if (profileError) {
-        setErrorMessage(profileError.message)
-        setActionLoadingId('')
-        return
-      }
-    }
-
-    setSuccessMessage(`${display(item.churchName)} approved.`)
-    await loadPendingVerifications()
-    setActionLoadingId('')
   }
+
+  setSuccessMessage(`${display(item.churchName)} approved.`)
+  await loadPendingVerifications()
+  setActionLoadingId('')
+}
 
   async function rejectPendingVerification(item: PendingVerificationItem) {
     setActionLoadingId(item.id)
