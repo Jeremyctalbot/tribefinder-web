@@ -1,16 +1,19 @@
-// app/create-account/page.tsx
-
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
 type AccountRole = 'church' | 'seeker'
 
 export default function CreateAccountPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+
+  const placeId = searchParams.get('placeId') || ''
+  const churchNameParam = searchParams.get('churchName') || ''
+  const addressParam = searchParams.get('address') || ''
 
   const [role, setRole] = useState<AccountRole>('church')
   const [email, setEmail] = useState('')
@@ -20,6 +23,26 @@ export default function CreateAccountPage() {
   const [lastName, setLastName] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
+
+  useEffect(() => {
+    if (placeId) {
+      window.sessionStorage.setItem('tribe_claim_place_id', placeId)
+    }
+
+    if (churchNameParam) {
+      window.sessionStorage.setItem(
+        'tribe_claim_church_name',
+        churchNameParam
+      )
+    }
+
+    if (addressParam) {
+      window.sessionStorage.setItem(
+        'tribe_claim_address',
+        addressParam
+      )
+    }
+  }, [placeId, churchNameParam, addressParam])
 
   async function handleCreateAccount() {
     setIsSubmitting(true)
@@ -59,13 +82,18 @@ export default function CreateAccountPage() {
       return
     }
 
-    const nextPath = role === 'church' ? '/claim' : '/'
+    const nextPath =
+      role === 'church'
+        ? '/claim'
+        : '/'
 
     const { data, error } = await supabase.auth.signUp({
       email: cleanEmail,
       password,
       options: {
-        emailRedirectTo: `${window.location.origin}/verify-email?next=${encodeURIComponent(nextPath)}`,
+        emailRedirectTo: `${window.location.origin}/verify-email?email=${encodeURIComponent(
+          cleanEmail
+        )}&next=${encodeURIComponent(nextPath)}`,
         data: {
           first_name: cleanFirstName,
           last_name: cleanLastName,
@@ -80,15 +108,22 @@ export default function CreateAccountPage() {
       return
     }
 
+    window.sessionStorage.setItem(
+      'tribe_pending_email',
+      cleanEmail
+    )
+
     if (data.user?.id && data.session) {
-      const { error: profileError } = await supabase.from('profiles').upsert({
-        id: data.user.id,
-        email: cleanEmail,
-        role,
-        first_name: cleanFirstName,
-        last_name: cleanLastName,
-        created_at: new Date().toISOString(),
-      })
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .upsert({
+          id: data.user.id,
+          email: cleanEmail,
+          role,
+          first_name: cleanFirstName,
+          last_name: cleanLastName,
+          created_at: new Date().toISOString(),
+        })
 
       if (profileError) {
         setErrorMessage(profileError.message)
@@ -98,7 +133,9 @@ export default function CreateAccountPage() {
     }
 
     router.push(
-      `/verify-email?email=${encodeURIComponent(cleanEmail)}&next=${encodeURIComponent(nextPath)}`
+      `/verify-email?email=${encodeURIComponent(
+        cleanEmail
+      )}&next=${encodeURIComponent(nextPath)}`
     )
   }
 
@@ -133,6 +170,24 @@ export default function CreateAccountPage() {
             Create your login first. After confirming your email, churches continue into the claim and verification flow.
           </p>
 
+          {churchNameParam && (
+            <div className="mt-6 rounded-2xl border border-teal-300/20 bg-teal-300/10 p-4">
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-teal-200">
+                Selected Church
+              </p>
+
+              <p className="mt-2 text-xl font-black">
+                {churchNameParam}
+              </p>
+
+              {addressParam && (
+                <p className="mt-1 text-sm text-white/60">
+                  {addressParam}
+                </p>
+              )}
+            </div>
+          )}
+
           {errorMessage && (
             <p className="mt-6 rounded-2xl border border-red-400/20 bg-red-400/10 p-4 text-red-200">
               {errorMessage}
@@ -141,7 +196,9 @@ export default function CreateAccountPage() {
 
           <div className="mt-8 space-y-5">
             <div>
-              <label className="text-sm text-gray-300">Account Type</label>
+              <label className="text-sm text-gray-300">
+                Account Type
+              </label>
 
               <div className="mt-2 grid grid-cols-2 gap-3">
                 <button
@@ -153,7 +210,10 @@ export default function CreateAccountPage() {
                       : 'border-white/10 bg-white/5 text-white/70 hover:bg-white/10'
                   }`}
                 >
-                  <span className="block font-black">Church</span>
+                  <span className="block font-black">
+                    Church
+                  </span>
+
                   <span className="mt-1 block text-xs text-white/50">
                     Claim or manage a church
                   </span>
@@ -168,7 +228,10 @@ export default function CreateAccountPage() {
                       : 'border-white/10 bg-white/5 text-white/70 hover:bg-white/10'
                   }`}
                 >
-                  <span className="block font-black">Seeker</span>
+                  <span className="block font-black">
+                    Seeker
+                  </span>
+
                   <span className="mt-1 block text-xs text-white/50">
                     Find a church home
                   </span>
@@ -177,13 +240,39 @@ export default function CreateAccountPage() {
             </div>
 
             <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-              <Input label="First Name" value={firstName} onChange={setFirstName} />
-              <Input label="Last Name" value={lastName} onChange={setLastName} />
+              <Input
+                label="First Name"
+                value={firstName}
+                onChange={setFirstName}
+              />
+
+              <Input
+                label="Last Name"
+                value={lastName}
+                onChange={setLastName}
+              />
             </div>
 
-            <Input label="Email" type="email" value={email} onChange={setEmail} />
-            <Input label="Password" type="password" value={password} onChange={setPassword} />
-            <Input label="Confirm Password" type="password" value={confirmPassword} onChange={setConfirmPassword} />
+            <Input
+              label="Email"
+              type="email"
+              value={email}
+              onChange={setEmail}
+            />
+
+            <Input
+              label="Password"
+              type="password"
+              value={password}
+              onChange={setPassword}
+            />
+
+            <Input
+              label="Confirm Password"
+              type="password"
+              value={confirmPassword}
+              onChange={setConfirmPassword}
+            />
 
             <button
               type="button"
@@ -191,12 +280,17 @@ export default function CreateAccountPage() {
               disabled={isSubmitting}
               className="w-full rounded-2xl bg-teal-400 py-4 font-black text-black transition hover:bg-teal-300 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {isSubmitting ? 'Creating account...' : 'Create Account'}
+              {isSubmitting
+                ? 'Creating account...'
+                : 'Create Account'}
             </button>
 
             <p className="text-center text-sm text-white/50">
               Already have an account?{' '}
-              <Link href="/login" className="font-bold text-teal-300 hover:text-teal-200">
+              <Link
+                href="/login"
+                className="font-bold text-teal-300 hover:text-teal-200"
+              >
                 Log in
               </Link>
             </p>
@@ -220,7 +314,9 @@ function Input({
 }) {
   return (
     <div>
-      <label className="text-sm text-gray-300">{label}</label>
+      <label className="text-sm text-gray-300">
+        {label}
+      </label>
 
       <input
         type={type}

@@ -122,7 +122,23 @@ function display(value?: string | number | null) {
 function ClaimPageContent() {
   const searchParams = useSearchParams()
 
-  const initialChurchName = searchParams.get('churchName') || ''
+  const initialChurchName =
+    searchParams.get('churchName') ||
+    (typeof window !== 'undefined'
+      ? window.sessionStorage.getItem('tribe_claim_church_name') || ''
+      : '')
+
+  const initialPlaceId =
+    searchParams.get('placeId') ||
+    (typeof window !== 'undefined'
+      ? window.sessionStorage.getItem('tribe_claim_place_id') || ''
+      : '')
+
+  const initialAddress =
+    searchParams.get('address') ||
+    (typeof window !== 'undefined'
+      ? window.sessionStorage.getItem('tribe_claim_address') || ''
+      : '')
 
   const [authChecking, setAuthChecking] = useState(true)
 
@@ -143,7 +159,7 @@ function ClaimPageContent() {
   const [churchEmail, setChurchEmail] = useState('')
   const [phone, setPhone] = useState('')
   const [website, setWebsite] = useState('')
-  const [address, setAddress] = useState('')
+  const [address, setAddress] = useState(initialAddress)
   const [city, setCity] = useState('')
   const [stateValue, setStateValue] = useState('')
   const [zipCode, setZipCode] = useState('')
@@ -203,11 +219,19 @@ function ClaimPageContent() {
         setChurchEmail(user.email)
       }
 
+      if (initialChurchName && !churchName) {
+        setChurchName(initialChurchName)
+      }
+
+      if (initialAddress && !address) {
+        setAddress(initialAddress)
+      }
+
       setAuthChecking(false)
     }
 
     requireVerifiedUser()
-  }, [churchEmail])
+  }, [churchEmail, initialChurchName, initialAddress, churchName, address])
 
   const filteredResults = useMemo(() => {
     const query = churchSearchText.trim().toLowerCase()
@@ -273,6 +297,18 @@ function ClaimPageContent() {
     setStateValue(church.state ?? '')
     setZipCode(church.zip_code ?? '')
     setErrorMessage('')
+
+    if (church.place_id) {
+      window.sessionStorage.setItem('tribe_claim_place_id', church.place_id)
+    }
+
+    if (church.name) {
+      window.sessionStorage.setItem('tribe_claim_church_name', church.name)
+    }
+
+    if (church.address) {
+      window.sessionStorage.setItem('tribe_claim_address', church.address)
+    }
   }
 
   async function searchChurches() {
@@ -367,7 +403,7 @@ function ClaimPageContent() {
     setErrorMessage('')
 
     if (mode === 'claim' && step === 0) {
-      if (!selectedChurch) {
+      if (!selectedChurch && !initialPlaceId) {
         setErrorMessage('Please select your church before continuing.')
         return false
       }
@@ -451,6 +487,9 @@ function ClaimPageContent() {
     setZipCode('')
     setWebsite('')
     setErrorMessage('')
+    window.sessionStorage.removeItem('tribe_claim_place_id')
+    window.sessionStorage.removeItem('tribe_claim_church_name')
+    window.sessionStorage.removeItem('tribe_claim_address')
   }
 
   async function handleSubmit() {
@@ -470,12 +509,21 @@ function ClaimPageContent() {
     }
 
     const cleanChurchName = clean(churchName)
+    const googlePlaceId =
+      selectedChurch?.place_id ||
+      initialPlaceId ||
+      window.sessionStorage.getItem('tribe_claim_place_id') ||
+      null
 
     const { data: existingClaims, error: existingClaimError } =
       await supabase
         .from('church_claim_requests')
         .select('id, status')
-        .ilike('church_name', cleanChurchName)
+        .or(
+          googlePlaceId
+            ? `google_place_id.eq.${googlePlaceId},church_name.ilike.${cleanChurchName}`
+            : `church_name.ilike.${cleanChurchName}`
+        )
         .in('status', ['pending', 'approved'])
         .limit(1)
 
@@ -498,7 +546,11 @@ function ClaimPageContent() {
     const { data: approvedProfiles, error: profileError } = await supabase
       .from('church_profiles')
       .select('id, church_name, verification_status')
-      .ilike('church_name', cleanChurchName)
+      .or(
+        googlePlaceId
+          ? `google_place_id.eq.${googlePlaceId},church_name.ilike.${cleanChurchName}`
+          : `church_name.ilike.${cleanChurchName}`
+      )
       .eq('verification_status', 'approved')
       .limit(1)
 
@@ -519,30 +571,31 @@ function ClaimPageContent() {
       .join(', ')
 
     const { error: claimError } = await supabase
-  .from('church_claim_requests')
-  .insert({
-    user_id: user.id,
-    claimed_church_id: null,
-    church_id: null,
-    church_name: cleanChurchName,
-    full_name: clean(fullName),
-    role_title: clean(roleTitle),
-    church_email: clean(churchEmail),
-    phone: clean(phone),
-    website: clean(website),
-    address: clean(address),
-    city: clean(city),
-    state: clean(stateValue),
-    zip_code: clean(zipCode),
-    denomination: clean(denomination),
-    authority_explanation: clean(authorityExplanation),
-    status: 'pending',
-    submitted_at: new Date().toISOString(),
-    search_zip_code: clean(zipSearch || zipCode),
-    latitude: selectedChurch?.latitude ?? null,
-    longitude: selectedChurch?.longitude ?? null,
-    distance_miles: selectedChurch?.distance_miles ?? null,
-  })
+      .from('church_claim_requests')
+      .insert({
+        user_id: user.id,
+        google_place_id: googlePlaceId,
+        claimed_church_id: null,
+        church_id: null,
+        church_name: cleanChurchName,
+        full_name: clean(fullName),
+        role_title: clean(roleTitle),
+        church_email: clean(churchEmail),
+        phone: clean(phone),
+        website: clean(website),
+        address: clean(address),
+        city: clean(city),
+        state: clean(stateValue),
+        zip_code: clean(zipCode),
+        denomination: clean(denomination),
+        authority_explanation: clean(authorityExplanation),
+        status: 'pending',
+        submitted_at: new Date().toISOString(),
+        search_zip_code: clean(zipSearch || zipCode),
+        latitude: selectedChurch?.latitude ?? null,
+        longitude: selectedChurch?.longitude ?? null,
+        distance_miles: selectedChurch?.distance_miles ?? null,
+      })
 
     if (claimError) {
       setErrorMessage(
@@ -550,6 +603,66 @@ function ClaimPageContent() {
           ? 'A claim request is already pending for this church.'
           : claimError.message
       )
+      setIsSubmitting(false)
+      return
+    }
+
+    const { error: profileInsertError } = await supabase
+      .from('church_profiles')
+      .upsert(
+        {
+          id: user.id,
+          google_place_id: googlePlaceId,
+          church_name: cleanChurchName,
+          full_name: clean(fullName),
+          role_title: clean(roleTitle),
+          email: clean(churchEmail),
+          phone: clean(phone),
+          website: clean(website),
+          denomination: clean(denomination),
+          worship_style: clean(worshipStyle),
+          church_size:
+            Number(weeklyAttendance) < 100
+              ? 'Small'
+              : Number(weeklyAttendance) < 300
+                ? 'Medium'
+                : Number(weeklyAttendance) < 1000
+                  ? 'Large'
+                  : 'Mega',
+          weekly_attendance: Number(weeklyAttendance),
+          kids_ministry: kidsMinistry,
+          youth_ministry: youthMinistry,
+          small_groups: smallGroups,
+          ministry_tags: ministryTags,
+          newcomer_features: newcomerFeatures,
+          serving_focuses: servingFocuses,
+          atmosphere_preference: clean(atmosphere),
+          service_times: serviceSchedule.map(
+            (entry) => `${entry.day} ${entry.time}`
+          ),
+          target_life_stages: lifeStages,
+          address: clean(address),
+          city: clean(city),
+          state: clean(stateValue),
+          zip_code: clean(zipCode),
+          latitude: selectedChurch?.latitude ?? null,
+          longitude: selectedChurch?.longitude ?? null,
+          bio: null,
+          authority_explanation: clean(authorityExplanation),
+          onboarding_complete: true,
+          verification_status: 'pending',
+          verification_notes: 'Claim request submitted and awaiting review.',
+          subscription_tier: 'tier1',
+          badge_type: null,
+          image_url: null,
+          gallery_images: [],
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'id' }
+      )
+
+    if (profileInsertError) {
+      setErrorMessage(profileInsertError.message)
       setIsSubmitting(false)
       return
     }
@@ -630,6 +743,32 @@ function ClaimPageContent() {
                 title="Find churches near your ZIP code"
                 description="Search within 10 miles, choose the correct church, then confirm your verification information."
               >
+                {initialChurchName && initialPlaceId && (
+                  <div className="mb-6 rounded-3xl border border-teal-300/20 bg-teal-300/10 p-5">
+                    <p className="text-sm font-black uppercase tracking-[0.16em] text-teal-200">
+                      Selected from search
+                    </p>
+
+                    <h3 className="mt-2 text-xl font-black">
+                      {initialChurchName}
+                    </h3>
+
+                    {initialAddress && (
+                      <p className="mt-1 text-sm text-white/60">
+                        {initialAddress}
+                      </p>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => setStep(1)}
+                      className="mt-5 rounded-2xl bg-teal-400 px-5 py-3 font-black text-black transition hover:bg-teal-300"
+                    >
+                      Continue with this church
+                    </button>
+                  </div>
+                )}
+
                 <div className="grid gap-4 md:grid-cols-[1fr_auto]">
                   <Input
                     label="ZIP Code"
@@ -734,16 +873,16 @@ function ClaimPageContent() {
                 title="Verification information"
                 description="This information helps us confirm that you legitimately represent this church."
               >
-                {selectedChurch && (
+                {(selectedChurch || initialChurchName) && (
                   <div className="mb-6 rounded-3xl border border-teal-300/20 bg-teal-300/10 p-5">
                     <p className="text-sm font-black uppercase tracking-[0.16em] text-teal-200">
                       Selected Church
                     </p>
                     <h3 className="mt-2 text-xl font-black">
-                      {selectedChurch.name}
+                      {selectedChurch?.name || initialChurchName}
                     </h3>
                     <p className="mt-1 text-sm text-white/60">
-                      {selectedChurch.address}
+                      {selectedChurch?.address || initialAddress}
                     </p>
                   </div>
                 )}
