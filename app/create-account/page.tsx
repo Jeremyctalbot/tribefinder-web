@@ -1,13 +1,15 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+export const dynamic = 'force-dynamic'
+
+import { Suspense, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
 type AccountRole = 'church' | 'seeker'
 
-export default function CreateAccountPage() {
+function CreateAccountContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
@@ -298,6 +300,14 @@ export default function CreateAccountPage() {
         </div>
       </section>
     </main>
+  )
+}
+
+export default function CreateAccountPage() {
+  return (
+    <Suspense fallback={null}>
+      <CreateAccountContent />
+    </Suspense>
   )
 }
 
