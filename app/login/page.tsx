@@ -1,18 +1,19 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
 
 type ProfileRole = 'admin' | 'church' | 'seeker'
 
-export default function Login() {
-  const router = useRouter()
+const PASSWORD_RESET_REDIRECT_URL = 'https://tribefinderapp.co/reset-password'
 
+export default function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [isSendingReset, setIsSendingReset] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
+  const [successMessage, setSuccessMessage] = useState('')
 
   function getErrorMessage(error: unknown) {
     if (!error) return 'Something went wrong.'
@@ -31,9 +32,37 @@ export default function Login() {
     return 'Unexpected error occurred.'
   }
 
+  async function handleForgotPassword() {
+    setErrorMessage('')
+    setSuccessMessage('')
+
+    const cleanEmail = email.trim().toLowerCase()
+
+    if (!cleanEmail) {
+      setErrorMessage('Enter your email first, then click forgot password.')
+      return
+    }
+
+    setIsSendingReset(true)
+
+    const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
+      redirectTo: PASSWORD_RESET_REDIRECT_URL,
+    })
+
+    if (error) {
+      setErrorMessage(getErrorMessage(error))
+      setIsSendingReset(false)
+      return
+    }
+
+    setSuccessMessage('Password reset email sent. Check your inbox.')
+    setIsSendingReset(false)
+  }
+
   async function handleLogin() {
     setIsLoading(true)
     setErrorMessage('')
+    setSuccessMessage('')
 
     const cleanEmail = email.trim().toLowerCase()
 
@@ -49,13 +78,11 @@ export default function Login() {
       return
     }
 
-    const {
-      data: signInData,
-      error: signInError,
-    } = await supabase.auth.signInWithPassword({
-      email: cleanEmail,
-      password,
-    })
+    const { data: signInData, error: signInError } =
+      await supabase.auth.signInWithPassword({
+        email: cleanEmail,
+        password,
+      })
 
     if (signInError) {
       setErrorMessage(getErrorMessage(signInError))
@@ -66,17 +93,12 @@ export default function Login() {
     const user = signInData.user
 
     if (!user?.id) {
-      setErrorMessage(
-        'Login succeeded, but no user session was returned.'
-      )
+      setErrorMessage('Login succeeded, but no user session was returned.')
       setIsLoading(false)
       return
     }
 
-    const {
-      data: profile,
-      error: profileError,
-    } = await supabase
+    const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('id, email, role')
       .eq('id', user.id)
@@ -89,9 +111,7 @@ export default function Login() {
     }
 
     if (!profile?.role) {
-      setErrorMessage(
-        'No profile role found for this account.'
-      )
+      setErrorMessage('No profile role found for this account.')
       setIsLoading(false)
       return
     }
@@ -113,10 +133,7 @@ export default function Login() {
       return
     }
 
-    setErrorMessage(
-      `Unsupported account role: ${profile.role}`
-    )
-
+    setErrorMessage(`Unsupported account role: ${profile.role}`)
     setIsLoading(false)
   }
 
@@ -152,9 +169,7 @@ export default function Login() {
               type="email"
               placeholder="you@church.com"
               value={email}
-              onChange={(event) =>
-                setEmail(event.target.value)
-              }
+              onChange={(event) => setEmail(event.target.value)}
               className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white outline-none focus:border-teal-300"
             />
           </div>
@@ -168,11 +183,20 @@ export default function Login() {
               type="password"
               placeholder="••••••••"
               value={password}
-              onChange={(event) =>
-                setPassword(event.target.value)
-              }
+              onChange={(event) => setPassword(event.target.value)}
               className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white outline-none focus:border-teal-300"
             />
+
+            <div className="mt-3 flex justify-end">
+              <button
+                type="button"
+                onClick={handleForgotPassword}
+                disabled={isSendingReset}
+                className="text-sm font-bold text-teal-300 transition hover:text-teal-200 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isSendingReset ? 'Sending reset email...' : 'Forgot password?'}
+              </button>
+            </div>
           </div>
 
           {errorMessage && (
@@ -181,14 +205,18 @@ export default function Login() {
             </p>
           )}
 
+          {successMessage && (
+            <p className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
+              {successMessage}
+            </p>
+          )}
+
           <button
             type="submit"
             disabled={isLoading}
             className="w-full rounded-xl bg-teal-400 py-3 font-bold text-black hover:bg-teal-300 transition disabled:opacity-60"
           >
-            {isLoading
-              ? 'Logging in...'
-              : 'Log in'}
+            {isLoading ? 'Logging in...' : 'Log in'}
           </button>
         </form>
       </div>
