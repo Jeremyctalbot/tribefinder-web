@@ -6,7 +6,7 @@ import Link from 'next/link'
 type ChurchSearchResult = {
   source: 'google' | 'supabase'
   id: string
-  placeId: string
+  placeId: string | null
   churchName: string
   address: string
   imageUrl: string | null
@@ -22,7 +22,15 @@ function claimUrl(church: ChurchSearchResult) {
     return `/church/${church.id}`
   }
 
-  return '/create-account'
+  const params = new URLSearchParams()
+
+  if (church.placeId) params.set('placeId', church.placeId)
+  if (church.churchName) params.set('churchName', church.churchName)
+  if (church.address) params.set('address', church.address)
+
+  const query = params.toString()
+
+  return query ? `/create-account?${query}` : '/create-account'
 }
 
 export default function FindYourChurchPage() {
@@ -157,15 +165,6 @@ export default function FindYourChurchPage() {
                   {isLoading ? 'Searching...' : 'Search'}
                 </button>
               </div>
-            </div>
-
-            <div className="mt-6">
-              <Link
-                href="/create-account"
-                className="inline-flex rounded-full border border-teal-300/20 bg-teal-300/10 px-5 py-3 text-sm font-bold text-teal-200 transition hover:bg-teal-300/20"
-              >
-                Church not listed? Create account →
-              </Link>
             </div>
 
             {errorMessage && (

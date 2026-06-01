@@ -105,7 +105,7 @@ export default function ForChurchesPage() {
 
           {/* 🔥 FIXED */}
           <a
-            href="/find-your-church"
+            href="/create-account"
             className="inline-block bg-teal-400 hover:bg-teal-300 text-black font-bold px-10 py-4 rounded-2xl transition shadow-[0_0_40px_rgba(45,212,191,0.35)]"
           >
             Start church claim

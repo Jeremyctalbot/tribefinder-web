@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import LoginForm from '../login/LoginForm'
 
-type DashboardTab = 'profile' | 'analytics' | 'edit'
+type DashboardTab = 'profile' | 'messages' | 'analytics' | 'edit'
 
 type AnalyticsSummary = {
   views: number
@@ -29,6 +29,40 @@ type ProfileImprovement = {
 type ProfileStrength = {
   score: number
   improvements: ProfileImprovement[]
+}
+
+type ConversationRow = {
+  id: string
+  seeker_id: string | null
+  church_id: string
+  created_by: string | null
+  created_at: string | null
+  updated_at: string | null
+  last_message_at: string | null
+  last_message_preview: string | null
+  is_archived_by_seeker: boolean | null
+  is_archived_by_church: boolean | null
+  is_blocked: boolean | null
+  blocked_by: string | null
+}
+
+type MessageRow = {
+  id: string
+  conversation_id: string
+  sender_id: string | null
+  sender_role: string | null
+  sender_name: string | null
+  message_body: string | null
+  payload?: any
+  event?: string | null
+  created_at: string | null
+  read_at: string | null
+  private?: boolean | null
+  updated_at?: string | null
+  is_edited?: boolean | null
+  edited_at?: string | null
+  inserted_at?: string | null
+  is_deleted?: boolean | null
 }
 
 type ChurchProfileForm = {
@@ -152,6 +186,29 @@ const serviceDayOptions = [
 function clean(value: string) {
   const trimmed = value.trim()
   return trimmed.length > 0 ? trimmed : null
+}
+
+function getFirstName(value?: string | null) {
+  const trimmed = value?.trim() ?? ''
+  if (!trimmed) return ''
+  return trimmed.split(/\s+/)[0]
+}
+
+function formatDateTime(value?: string | null) {
+  if (!value) return 'No date'
+
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) {
+    return 'No date'
+  }
+
+  return date.toLocaleString([], {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
 }
 
 function deriveChurchSize(attendance: string) {
@@ -497,6 +554,17 @@ export default function Dashboard() {
     messages: 0,
     visitRequests: 0,
   })
+  const [conversations, setConversations] = useState<ConversationRow[]>([])
+  const [selectedConversation, setSelectedConversation] =
+    useState<ConversationRow | null>(null)
+  const [conversationMessages, setConversationMessages] = useState<MessageRow[]>(
+    []
+  )
+  const [messagesLoading, setMessagesLoading] = useState(false)
+  const [threadLoading, setThreadLoading] = useState(false)
+  const [replyText, setReplyText] = useState('')
+  const [sendingReply, setSendingReply] = useState(false)
+  const [messageError, setMessageError] = useState('')
   const [loading, setLoading] = useState(true)
   const [savingProfile, setSavingProfile] = useState(false)
   const [saveMessage, setSaveMessage] = useState('')
@@ -533,7 +601,7 @@ export default function Dashboard() {
         setEditForm(profileToForm(data))
 
         if (isApproved(data.verification_status)) {
-          await loadAnalytics(data.id)
+          await Promise.all([loadAnalytics(data.id), loadConversations(data.id)])
         }
       }
 
@@ -582,6 +650,197 @@ export default function Dashboard() {
     setAnalyticsLoading(false)
   }
 
+  async function loadConversations(churchId: string) {
+    setMessagesLoading(true)
+    setMessageError('')
+
+    const { data, error } = await supabase
+      .from('conversations')
+      .select('*')
+      .eq('church_id', churchId)
+      .eq('is_archived_by_church', false)
+      .order('last_message_at', { ascending: false, nullsFirst: false })
+
+    if (error) {
+      console.error('Conversations load error:', error)
+      setMessageError(error.message)
+      setMessagesLoading(false)
+      return
+    }
+
+    const rows = (data ?? []) as ConversationRow[]
+    setConversations(rows)
+
+    if (!selectedConversation && rows.length > 0) {
+      await openConversation(rows[0])
+    }
+
+    setMessagesLoading(false)
+  }
+
+  async function openConversation(conversation: ConversationRow) {
+    setSelectedConversation(conversation)
+    setThreadLoading(true)
+    setMessageError('')
+    setReplyText('')
+
+    const { data, error } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('conversation_id', conversation.id)
+      .or('is_deleted.is.null,is_deleted.eq.false')
+      .order('created_at', { ascending: true })
+
+    if (error) {
+      console.error('Messages load error:', error)
+      setMessageError(error.message)
+      setThreadLoading(false)
+      return
+    }
+
+    const rows = (data ?? []) as MessageRow[]
+    setConversationMessages(rows)
+    setThreadLoading(false)
+
+    const unreadSeekerMessageIds = rows
+      .filter(
+        (message) =>
+          message.sender_role !== 'church' &&
+          !message.read_at &&
+          !message.is_deleted
+      )
+      .map((message) => message.id)
+
+    if (unreadSeekerMessageIds.length > 0) {
+      await supabase
+        .from('messages')
+        .update({ read_at: new Date().toISOString() })
+        .in('id', unreadSeekerMessageIds)
+    }
+  }
+
+  async function sendReply() {
+    if (!profile || !selectedConversation) return
+
+    const trimmedReply = replyText.trim()
+
+    if (!trimmedReply) return
+
+    setSendingReply(true)
+    setMessageError('')
+
+    const { data: userData } = await supabase.auth.getUser()
+
+    if (!userData?.user) {
+      setSendingReply(false)
+      setMessageError('You need to be logged in to send messages.')
+      return
+    }
+
+    const senderName =
+      getFirstName(profile.full_name) ||
+      getFirstName(profile.church_name) ||
+      'Church'
+
+    const { data: insertedMessage, error: insertError } = await supabase
+      .from('messages')
+      .insert({
+        conversation_id: selectedConversation.id,
+        sender_id: userData.user.id,
+        sender_role: 'church',
+        sender_name: senderName,
+        message_body: trimmedReply,
+        event: 'message_sent',
+      })
+      .select('*')
+      .single()
+
+    if (insertError) {
+      console.error('Message send error:', insertError)
+      setMessageError(insertError.message)
+      setSendingReply(false)
+      return
+    }
+
+    const now = new Date().toISOString()
+
+    const { error: conversationError } = await supabase
+      .from('conversations')
+      .update({
+        last_message_preview: trimmedReply,
+        last_message_at: now,
+        updated_at: now,
+      })
+      .eq('id', selectedConversation.id)
+
+    if (conversationError) {
+      console.error('Conversation update error:', conversationError)
+    }
+
+    setConversationMessages((current) => [
+      ...current,
+      insertedMessage as MessageRow,
+    ])
+
+    setConversations((current) => {
+      const updated = current.map((conversation) =>
+        conversation.id === selectedConversation.id
+          ? {
+              ...conversation,
+              last_message_preview: trimmedReply,
+              last_message_at: now,
+              updated_at: now,
+            }
+          : conversation
+      )
+
+      return updated.sort((a, b) => {
+        const aTime = a.last_message_at
+          ? new Date(a.last_message_at).getTime()
+          : 0
+        const bTime = b.last_message_at
+          ? new Date(b.last_message_at).getTime()
+          : 0
+
+        return bTime - aTime
+      })
+    })
+
+    setSelectedConversation({
+      ...selectedConversation,
+      last_message_preview: trimmedReply,
+      last_message_at: now,
+      updated_at: now,
+    })
+
+    setReplyText('')
+    setSendingReply(false)
+  }
+
+  async function archiveConversation(conversationId: string) {
+    const { error } = await supabase
+      .from('conversations')
+      .update({
+        is_archived_by_church: true,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', conversationId)
+
+    if (error) {
+      setMessageError(error.message)
+      return
+    }
+
+    setConversations((current) =>
+      current.filter((conversation) => conversation.id !== conversationId)
+    )
+
+    if (selectedConversation?.id === conversationId) {
+      setSelectedConversation(null)
+      setConversationMessages([])
+    }
+  }
+
   async function saveProfile() {
     if (!profile || !editForm) return
 
@@ -596,10 +855,7 @@ export default function Dashboard() {
       editForm.gallery_images
     ).slice(0, photoLimit)
 
-    const primaryImageUrl =
-      editForm.image_url.trim() ||
-      normalizedGallery[0] ||
-      ''
+    const primaryImageUrl = editForm.image_url.trim() || normalizedGallery[0] || ''
 
     const payload = {
       church_name: clean(editForm.church_name),
@@ -664,7 +920,9 @@ export default function Dashboard() {
   const saveRate =
     analytics.views > 0 ? Math.round((analytics.saves / analytics.views) * 100) : 0
   const messageRate =
-    analytics.views > 0 ? Math.round((analytics.messages / analytics.views) * 100) : 0
+    analytics.views > 0
+      ? Math.round((analytics.messages / analytics.views) * 100)
+      : 0
   const visitRate =
     analytics.views > 0
       ? Math.round((analytics.visitRequests / analytics.views) * 100)
@@ -746,6 +1004,15 @@ export default function Dashboard() {
           />
 
           <TabButton
+            label="Messages"
+            active={activeTab === 'messages'}
+            onClick={() => {
+              setActiveTab('messages')
+              if (profile?.id) loadConversations(profile.id)
+            }}
+          />
+
+          <TabButton
             label="Analytics"
             active={activeTab === 'analytics'}
             onClick={() => setActiveTab('analytics')}
@@ -801,7 +1068,9 @@ export default function Dashboard() {
                     >
                       <img
                         src={imageUrl}
-                        alt={`${profile.church_name || 'Church'} photo ${index + 1}`}
+                        alt={`${profile.church_name || 'Church'} photo ${
+                          index + 1
+                        }`}
                         className="h-full w-full object-cover"
                       />
 
@@ -848,10 +1117,22 @@ export default function Dashboard() {
             </Card>
 
             <Card title="Ministries">
-              <Info label="Kids Ministry" value={profile.kids_ministry ? 'Yes' : 'No'} />
-              <Info label="Youth Ministry" value={profile.youth_ministry ? 'Yes' : 'No'} />
-              <Info label="Small Groups" value={profile.small_groups ? 'Yes' : 'No'} />
-              <TagList values={profile.ministry_tags} empty="No ministry highlights added." />
+              <Info
+                label="Kids Ministry"
+                value={profile.kids_ministry ? 'Yes' : 'No'}
+              />
+              <Info
+                label="Youth Ministry"
+                value={profile.youth_ministry ? 'Yes' : 'No'}
+              />
+              <Info
+                label="Small Groups"
+                value={profile.small_groups ? 'Yes' : 'No'}
+              />
+              <TagList
+                values={profile.ministry_tags}
+                empty="No ministry highlights added."
+              />
             </Card>
 
             <Card title="Newcomer Experience">
@@ -862,9 +1143,29 @@ export default function Dashboard() {
             </Card>
 
             <Card title="Serving & Outreach">
-              <TagList values={profile.serving_focuses} empty="No serving focuses added." />
+              <TagList
+                values={profile.serving_focuses}
+                empty="No serving focuses added."
+              />
             </Card>
           </div>
+        )}
+
+        {activeTab === 'messages' && (
+          <MessagesPanel
+            conversations={conversations}
+            selectedConversation={selectedConversation}
+            messages={conversationMessages}
+            messagesLoading={messagesLoading}
+            threadLoading={threadLoading}
+            replyText={replyText}
+            sendingReply={sendingReply}
+            messageError={messageError}
+            onSelectConversation={openConversation}
+            onReplyTextChange={setReplyText}
+            onSendReply={sendReply}
+            onArchiveConversation={archiveConversation}
+          />
         )}
 
         {activeTab === 'analytics' && (
@@ -922,6 +1223,225 @@ export default function Dashboard() {
   )
 }
 
+function MessagesPanel({
+  conversations,
+  selectedConversation,
+  messages,
+  messagesLoading,
+  threadLoading,
+  replyText,
+  sendingReply,
+  messageError,
+  onSelectConversation,
+  onReplyTextChange,
+  onSendReply,
+  onArchiveConversation,
+}: {
+  conversations: ConversationRow[]
+  selectedConversation: ConversationRow | null
+  messages: MessageRow[]
+  messagesLoading: boolean
+  threadLoading: boolean
+  replyText: string
+  sendingReply: boolean
+  messageError: string
+  onSelectConversation: (conversation: ConversationRow) => void
+  onReplyTextChange: (value: string) => void
+  onSendReply: () => void
+  onArchiveConversation: (conversationId: string) => void
+}) {
+  return (
+    <section className="space-y-6">
+      <div className="rounded-3xl border border-teal-300/15 bg-gradient-to-br from-white/[0.08] to-white/[0.03] p-6 shadow-2xl backdrop-blur-xl">
+        <p className="text-sm font-bold uppercase tracking-[0.2em] text-teal-300">
+          Church inbox
+        </p>
+        <h2 className="mt-2 text-3xl font-black tracking-tight">Messages</h2>
+        <p className="mt-2 max-w-3xl text-white/60">
+          Reply to seekers from the web dashboard. App message notifications can
+          stay push-only.
+        </p>
+      </div>
+
+      {messageError && (
+        <div className="rounded-2xl border border-red-400/20 bg-red-400/10 p-4 text-sm font-semibold text-red-200">
+          {messageError}
+        </div>
+      )}
+
+      <div className="grid min-h-[620px] overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04] shadow-2xl backdrop-blur-xl lg:grid-cols-[360px_1fr]">
+        <div className="border-b border-white/10 bg-black/20 lg:border-b-0 lg:border-r">
+          <div className="border-b border-white/10 p-5">
+            <h3 className="text-lg font-black">Conversations</h3>
+            <p className="mt-1 text-sm text-white/45">
+              {messagesLoading
+                ? 'Loading...'
+                : `${conversations.length} conversation${
+                    conversations.length === 1 ? '' : 's'
+                  }`}
+            </p>
+          </div>
+
+          <div className="max-h-[540px] overflow-y-auto">
+            {conversations.length === 0 && !messagesLoading ? (
+              <div className="p-6">
+                <EmptyState text="No conversations yet." />
+              </div>
+            ) : (
+              conversations.map((conversation) => (
+                <button
+                  type="button"
+                  key={conversation.id}
+                  onClick={() => onSelectConversation(conversation)}
+                  className={`block w-full border-b border-white/5 p-5 text-left transition ${
+                    selectedConversation?.id === conversation.id
+                      ? 'bg-teal-300/10'
+                      : 'hover:bg-white/[0.04]'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-black text-white">
+                        Seeker conversation
+                      </p>
+                      <p className="mt-1 line-clamp-2 text-sm leading-5 text-white/55">
+                        {conversation.last_message_preview ||
+                          'No message preview yet.'}
+                      </p>
+                    </div>
+
+                    {conversation.is_blocked && (
+                      <span className="rounded-full border border-red-400/20 bg-red-400/10 px-2 py-1 text-xs font-bold text-red-200">
+                        Blocked
+                      </span>
+                    )}
+                  </div>
+
+                  <p className="mt-3 text-xs font-semibold uppercase tracking-[0.16em] text-white/30">
+                    {formatDateTime(
+                      conversation.last_message_at || conversation.updated_at
+                    )}
+                  </p>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+
+        <div className="flex min-h-[620px] flex-col">
+          {!selectedConversation ? (
+            <div className="flex flex-1 items-center justify-center p-10 text-center">
+              <div>
+                <p className="text-4xl">💬</p>
+                <h3 className="mt-4 text-2xl font-black">No conversation selected</h3>
+                <p className="mt-2 max-w-md text-white/50">
+                  Choose a conversation from the inbox to view the thread and
+                  reply.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center justify-between gap-4 border-b border-white/10 p-5">
+                <div>
+                  <h3 className="text-xl font-black">Message thread</h3>
+                  <p className="mt-1 text-sm text-white/45">
+                    Last updated{' '}
+                    {formatDateTime(
+                      selectedConversation.last_message_at ||
+                        selectedConversation.updated_at
+                    )}
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => onArchiveConversation(selectedConversation.id)}
+                  className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-bold text-white/60 transition hover:bg-white/[0.08]"
+                >
+                  Archive
+                </button>
+              </div>
+
+              <div className="flex-1 space-y-4 overflow-y-auto p-5">
+                {threadLoading ? (
+                  <p className="text-white/50">Loading messages...</p>
+                ) : messages.length === 0 ? (
+                  <EmptyState text="No messages in this thread yet." />
+                ) : (
+                  messages.map((message) => (
+                    <MessageBubble key={message.id} message={message} />
+                  ))
+                )}
+              </div>
+
+              {selectedConversation.is_blocked ? (
+                <div className="border-t border-white/10 p-5">
+                  <div className="rounded-2xl border border-red-400/20 bg-red-400/10 p-4 text-sm font-semibold text-red-200">
+                    This conversation is blocked. Replies are disabled.
+                  </div>
+                </div>
+              ) : (
+                <div className="border-t border-white/10 p-5">
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-semibold text-white/50">
+                      Reply
+                    </span>
+                    <textarea
+                      value={replyText}
+                      onChange={(event) => onReplyTextChange(event.target.value)}
+                      rows={4}
+                      placeholder="Write a helpful reply..."
+                      className="w-full rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-white outline-none transition placeholder:text-white/30 focus:border-teal-300/50"
+                    />
+                  </label>
+
+                  <div className="mt-3 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={onSendReply}
+                      disabled={sendingReply || replyText.trim().length === 0}
+                      className="rounded-2xl bg-teal-400 px-6 py-3 font-black text-black shadow-lg shadow-teal-400/20 transition hover:bg-teal-300 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {sendingReply ? 'Sending...' : 'Send Reply'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function MessageBubble({ message }: { message: MessageRow }) {
+  const isChurch = message.sender_role === 'church'
+  const senderName = getFirstName(message.sender_name) || (isChurch ? 'Church' : 'Seeker')
+
+  return (
+    <div className={`flex ${isChurch ? 'justify-end' : 'justify-start'}`}>
+      <div
+        className={`max-w-[80%] rounded-3xl border px-5 py-4 ${
+          isChurch
+            ? 'border-teal-300/20 bg-teal-300/15 text-teal-50'
+            : 'border-white/10 bg-white/[0.06] text-white'
+        }`}
+      >
+        <div className="mb-2 flex items-center justify-between gap-4">
+          <p className="text-sm font-black">{senderName}</p>
+          <p className="text-xs text-white/35">{formatDateTime(message.created_at)}</p>
+        </div>
+
+        <p className="whitespace-pre-wrap leading-relaxed text-white/80">
+          {message.message_body || ''}
+        </p>
+      </div>
+    </div>
+  )
+}
+
 function EditProfileForm({
   form,
   setForm,
@@ -952,24 +1472,24 @@ function EditProfileForm({
   }
 
   function toggleArray(
-  key:
-    | 'ministry_tags'
-    | 'newcomer_features'
-    | 'serving_focuses'
-    | 'target_life_stages',
-  value: string
-) {
-  const current = form[key] ?? []
+    key:
+      | 'ministry_tags'
+      | 'newcomer_features'
+      | 'serving_focuses'
+      | 'target_life_stages',
+    value: string
+  ) {
+    const current = form[key] ?? []
 
-  const next = current.includes(value)
-    ? current.filter((item) => item !== value)
-    : [...current, value].sort()
+    const next = current.includes(value)
+      ? current.filter((item) => item !== value)
+      : [...current, value].sort()
 
-  setForm({
-    ...form,
-    [key]: next,
-  })
-}
+    setForm({
+      ...form,
+      [key]: next,
+    })
+  }
 
   function updateServiceRow(
     index: number,
@@ -1331,10 +1851,10 @@ function PhotoManager({
 
   const photoLimit = getPhotoLimit(profile.subscription_tier)
   const planName = getPlanName(profile.subscription_tier)
-  const galleryImages = normalizeGalleryImages(form.image_url, form.gallery_images).slice(
-    0,
-    photoLimit
-  )
+  const galleryImages = normalizeGalleryImages(
+    form.image_url,
+    form.gallery_images
+  ).slice(0, photoLimit)
   const remainingSlots = Math.max(photoLimit - galleryImages.length, 0)
   const slotCount = Math.max(photoLimit, 1)
 
