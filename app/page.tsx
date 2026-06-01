@@ -30,6 +30,10 @@ export default function Home() {
           <h1 className="text-5xl md:text-8xl font-black tracking-tight mb-6">
             yeah… we made it
           </h1>
+          
+          <div className="mb-8 rounded-2xl border border-teal-300/20 bg-teal-400/10 px-5 py-4 text-sm md:text-base text-teal-100">
+          🎉 Tribe Finder is now live on the App Store. Churches that sign up before June 30 receive 3 months of Growth Tier free.
+          </div>
 
           <h2 className="text-2xl md:text-4xl text-gray-300 mb-6">
             the easiest way to find a church that actually fits
@@ -43,10 +47,12 @@ export default function Home() {
             
             {/* PRIMARY CTA */}
             <a
-              href="/download"
-              className="bg-teal-400 hover:bg-teal-300 text-black font-bold px-8 py-4 rounded-2xl transition shadow-[0_0_40px_rgba(45,212,191,0.35)]"
+            href="https://apps.apple.com/us/app/id6771368585"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="bg-teal-400 hover:bg-teal-300 text-black font-bold px-8 py-4 rounded-2xl transition shadow-[0_0_40px_rgba(45,212,191,0.35)]"
             >
-              Download the app
+            Download the app
             </a>
 
             {/* SECONDARY CTA */}
@@ -178,7 +184,9 @@ export default function Home() {
           </p>
 
           <a
-            href="/download"
+            href="https://apps.apple.com/us/app/id6771368585"
+            target="_blank"
+            rel="noopener noreferrer"
             className="bg-teal-400 hover:bg-teal-300 text-black font-bold px-10 py-4 rounded-2xl transition shadow-[0_0_40px_rgba(45,212,191,0.35)]"
           >
             Download the app
