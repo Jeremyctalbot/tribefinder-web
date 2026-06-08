@@ -7,7 +7,10 @@ import { supabase } from '@/lib/supabase'
 
 type ChurchSearchResult = {
   id: string
+  claimed_church_id?: string | null
+  church_id?: string | null
   place_id?: string | null
+  google_place_id?: string | null
   name: string
   address: string
   city?: string | null
@@ -298,8 +301,10 @@ function ClaimPageContent() {
     setZipCode(church.zip_code ?? '')
     setErrorMessage('')
 
-    if (church.place_id) {
-      window.sessionStorage.setItem('tribe_claim_place_id', church.place_id)
+    const placeId = church.google_place_id || church.place_id
+
+    if (placeId) {
+      window.sessionStorage.setItem('tribe_claim_place_id', placeId)
     }
 
     if (church.name) {
@@ -342,16 +347,28 @@ function ClaimPageContent() {
         .map((item: any) => ({
           id:
             item.id ||
+            item.claimed_church_id ||
             item.place_id ||
             item.placeId ||
             item.google_place_id ||
             `${item.name}-${item.address}`,
+          claimed_church_id: item.claimed_church_id || null,
+          church_id: item.church_id || null,
+          google_place_id:
+            item.google_place_id ||
+            item.place_id ||
+            item.placeId ||
+            null,
           place_id:
             item.place_id ||
             item.placeId ||
             item.google_place_id ||
             null,
-          name: item.name || item.church_name || 'Unknown Church',
+          name:
+            item.name ||
+            item.church_name ||
+            item.churchName ||
+            'Unknown Church',
           address:
             item.address ||
             item.formatted_address ||
@@ -509,11 +526,15 @@ function ClaimPageContent() {
     }
 
     const cleanChurchName = clean(churchName)
+
     const googlePlaceId =
+      selectedChurch?.google_place_id ||
       selectedChurch?.place_id ||
       initialPlaceId ||
       window.sessionStorage.getItem('tribe_claim_place_id') ||
       null
+
+    const claimedChurchId = selectedChurch?.claimed_church_id ?? null
 
     const { data: existingClaims, error: existingClaimError } =
       await supabase
@@ -566,16 +587,12 @@ function ClaimPageContent() {
       return
     }
 
-    const scheduleText = serviceSchedule
-      .map((entry) => `${entry.day} ${entry.time}`)
-      .join(', ')
-
     const { error: claimError } = await supabase
       .from('church_claim_requests')
       .insert({
         user_id: user.id,
         google_place_id: googlePlaceId,
-        claimed_church_id: null,
+        claimed_church_id: claimedChurchId,
         church_id: null,
         church_name: cleanChurchName,
         full_name: clean(fullName),
