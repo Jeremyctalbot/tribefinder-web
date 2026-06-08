@@ -13,7 +13,9 @@ export default function DownloadPage() {
         </p>
 
         <a
-          href="#"
+          href="https://apps.apple.com/us/app/id6771368585"
+          target="_blank"
+          rel="noopener noreferrer"
           className="inline-block bg-teal-400 hover:bg-teal-300 text-black font-bold px-10 py-4 rounded-2xl text-lg transition shadow-[0_0_40px_rgba(45,212,191,0.35)]"
         >
           Download on the App Store

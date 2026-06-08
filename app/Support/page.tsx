@@ -30,7 +30,7 @@ export default function SupportPage() {
               issues, church verification, onboarding questions, technical
               support, and general feedback.
             </p>
-          </div>
+          </div>lets g
 
           <div className="space-y-8">
             <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-6">
