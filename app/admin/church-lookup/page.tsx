@@ -1,3 +1,5 @@
+// app/admin/church-lookup/page.tsx
+
 'use client'
 
 import { useEffect, useState } from 'react'
@@ -6,12 +8,12 @@ import { supabase } from '@/lib/supabase'
 
 type ChurchResult = {
   id: string
-  church_name: string | null
-  address: string | null
+  church_name: string
+  address: string
   city: string | null
   state: string | null
   zip_code: string | null
-  verification_status: string | null
+  verification_status: string
   google_place_id: string | null
 }
 
@@ -59,42 +61,85 @@ function AdminChurchLookupPage() {
     setResults([])
 
     const cleanZip = zip.trim()
-    const cleanName = name.trim()
+    const cleanName = name.trim().toLowerCase()
 
-    if (!cleanZip && !cleanName) {
-      setError('Enter a ZIP code or church name.')
+    if (!cleanZip) {
+      setError('Enter a ZIP code.')
+      return
+    }
+
+    if (cleanZip.length !== 5 || !/^\d+$/.test(cleanZip)) {
+      setError('Enter a valid 5-digit ZIP code.')
       return
     }
 
     setLoading(true)
 
-    let query = supabase
-      .from('church_profiles')
-      .select(
-        'id, church_name, address, city, state, zip_code, verification_status, google_place_id'
+    try {
+      const response = await fetch(
+        `/api/church-search?zip=${encodeURIComponent(cleanZip)}&radius=10`
       )
-      .or('verification_status.is.null,verification_status.neq.approved')
-      .order('church_name', { ascending: true })
-      .limit(50)
 
-    if (cleanZip) {
-      query = query.eq('zip_code', cleanZip)
+      const json = await response.json()
+
+      if (!response.ok) {
+        throw new Error(json?.error || 'Church search failed.')
+      }
+
+      const rawResults = json?.churches || json?.results || json?.data || []
+
+      const normalized: ChurchResult[] = rawResults
+        .map((item: any) => {
+          const googleId =
+            item.place_id ||
+            item.placeId ||
+            item.google_place_id ||
+            item.id ||
+            ''
+
+          return {
+            id: googleId,
+            church_name:
+              item.name ||
+              item.church_name ||
+              'Unknown Church',
+            address:
+              item.address ||
+              item.formatted_address ||
+              item.location ||
+              '',
+            city: item.city || null,
+            state: item.state || null,
+            zip_code:
+              item.zip_code ||
+              item.zipCode ||
+              item.postal_code ||
+              cleanZip,
+            verification_status: 'google_unclaimed',
+            google_place_id: googleId || null,
+          }
+        })
+        .filter((church: ChurchResult) => {
+          const hasRequiredData = church.id && church.church_name
+
+          if (!cleanName) return hasRequiredData
+
+          return (
+            hasRequiredData &&
+            church.church_name.toLowerCase().includes(cleanName)
+          )
+        })
+
+      setResults(normalized)
+    } catch (error) {
+      setError(
+        error instanceof Error
+          ? error.message
+          : 'Church search failed.'
+      )
     }
-
-    if (cleanName) {
-      query = query.ilike('church_name', `%${cleanName}%`)
-    }
-
-    const { data, error } = await query
 
     setLoading(false)
-
-    if (error) {
-      setError(error.message)
-      return
-    }
-
-    setResults(data || [])
   }
 
   async function copy(value: string) {
@@ -120,10 +165,10 @@ function AdminChurchLookupPage() {
               Admin Tool
             </p>
             <h1 className="mt-2 text-4xl font-black">
-              Church UUID Lookup
+              Google Church ID Lookup
             </h1>
             <p className="mt-2 text-white/60">
-              Search unclaimed or pending churches by ZIP code or name.
+              Search Google churches by ZIP code and copy the Google Place ID.
             </p>
           </div>
 
@@ -148,7 +193,7 @@ function AdminChurchLookupPage() {
             <input
               value={name}
               onChange={(event) => setName(event.target.value)}
-              placeholder="Church name"
+              placeholder="Optional church name filter"
               className="rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-white outline-none focus:border-teal-300"
             />
 
@@ -177,7 +222,7 @@ function AdminChurchLookupPage() {
                 <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                   <div>
                     <h2 className="text-xl font-black">
-                      {church.church_name || 'Unnamed Church'}
+                      {church.church_name}
                     </h2>
 
                     <p className="mt-1 text-sm text-white/55">
@@ -187,7 +232,7 @@ function AdminChurchLookupPage() {
                     </p>
 
                     <p className="mt-2 text-sm text-teal-200">
-                      Status: {church.verification_status || 'unclaimed'}
+                      Source: Google / Unclaimed
                     </p>
                   </div>
 
@@ -196,29 +241,18 @@ function AdminChurchLookupPage() {
                     onClick={() => copy(church.id)}
                     className="rounded-xl bg-white px-4 py-2 text-sm font-black text-black hover:bg-teal-200"
                   >
-                    Copy UUID
+                    Copy Google ID
                   </button>
                 </div>
 
                 <div className="mt-4 rounded-2xl bg-zinc-950 p-4">
                   <p className="text-xs font-black uppercase tracking-[0.16em] text-white/35">
-                    Church UUID
+                    Google Place ID
                   </p>
                   <code className="mt-2 block break-all text-sm text-teal-300">
                     {church.id}
                   </code>
                 </div>
-
-                {church.google_place_id && (
-                  <div className="mt-3 rounded-2xl bg-zinc-950 p-4">
-                    <p className="text-xs font-black uppercase tracking-[0.16em] text-white/35">
-                      Google Place ID
-                    </p>
-                    <code className="mt-2 block break-all text-sm text-blue-300">
-                      {church.google_place_id}
-                    </code>
-                  </div>
-                )}
               </div>
             ))}
 
