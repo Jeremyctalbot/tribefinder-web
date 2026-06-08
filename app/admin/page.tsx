@@ -523,6 +523,12 @@ export default function AdminPage() {
             href="/admin/users"
             className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-bold text-white/75 transition hover:bg-white/10"
           >
+            <Link
+            href="/admin/church-lookup"
+            className="rounded-2xl bg-teal-400 px-5 py-3 font-black text-black hover:bg-teal-300"
+            >
+            Church UUID Lookup
+            </Link>
             Users
           </Link>
 
