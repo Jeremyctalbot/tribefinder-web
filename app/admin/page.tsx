@@ -41,6 +41,7 @@ type ChurchClaimRequest = {
 
 type PendingChurchProfile = {
   id: string
+  church_id: string | null
   church_name: string | null
   full_name: string | null
   role_title: string | null
@@ -61,6 +62,8 @@ type PendingVerificationItem = {
   id: string
   churchProfileId: string | null
   userId: string | null
+  churchEntityId: string | null
+  claimedChurchId: string | null
   churchName: string | null
   fullName: string | null
   roleTitle: string | null
@@ -108,6 +111,8 @@ function normalizeClaimRequest(claim: ChurchClaimRequest): PendingVerificationIt
     id: claim.id,
     churchProfileId: claim.user_id,
     userId: claim.user_id,
+    churchEntityId: null,
+    claimedChurchId: claim.claimed_church_id,
     churchName: claim.church_name,
     fullName: claim.full_name,
     roleTitle: claim.role_title,
@@ -135,6 +140,8 @@ function normalizeChurchProfile(profile: PendingChurchProfile): PendingVerificat
     id: profile.id,
     churchProfileId: profile.id,
     userId: profile.id,
+    churchEntityId: profile.church_id,
+    claimedChurchId: null,
     churchName: profile.church_name,
     fullName: profile.full_name,
     roleTitle: profile.role_title,
@@ -283,6 +290,7 @@ export default function AdminPage() {
       .select(
         `
         id,
+        church_id,
         church_name,
         full_name,
         role_title,
@@ -315,51 +323,142 @@ export default function AdminPage() {
     setLoadingPending(false)
   }
 
-  async function approvePendingVerification(item: PendingVerificationItem) {
-  setActionLoadingId(item.id)
-  setErrorMessage('')
-  setSuccessMessage('')
-
-  if (!item.userId) {
-    setErrorMessage('This pending request does not have a user_id, so it cannot be approved yet.')
-    setActionLoadingId('')
-    return
-  }
-
-  const { error: profileError } = await supabase
-    .from('church_profiles')
-    .update({
-      verification_status: 'approved',
-      onboarding_complete: true,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', item.userId)
-
-  if (profileError) {
-    setErrorMessage(profileError.message)
-    setActionLoadingId('')
-    return
-  }
-
-  if (item.source === 'claim_request') {
-    const { error: claimError } = await supabase
-      .from('church_claim_requests')
-      .update({
-        status: 'approved',
-      })
-      .eq('id', item.id)
-
-    if (claimError) {
-      setErrorMessage(claimError.message)
-      setActionLoadingId('')
-      return
+  async function getOrCreateChurchEntity(item: PendingVerificationItem) {
+    if (!item.userId) {
+      throw new Error('Missing user_id.')
     }
+
+    const { data: profileData, error: profileFetchError } = await supabase
+      .from('church_profiles')
+      .select('id, church_id, church_name, address, city, state, zip_code, denomination, latitude, longitude')
+      .eq('id', item.userId)
+      .maybeSingle()
+
+    if (profileFetchError) {
+      throw new Error(profileFetchError.message)
+    }
+
+    if (profileData?.church_id) {
+      return profileData.church_id
+    }
+
+    const { data: existingChurch, error: existingChurchError } = await supabase
+      .from('churches')
+      .select('id')
+      .eq('owner_id', item.userId)
+      .maybeSingle()
+
+    if (existingChurchError) {
+      throw new Error(existingChurchError.message)
+    }
+
+    if (existingChurch?.id) {
+      return existingChurch.id
+    }
+
+    const { data: insertedChurch, error: insertChurchError } = await supabase
+      .from('churches')
+      .insert({
+        owner_id: item.userId,
+        name: item.churchName || profileData?.church_name || 'Unnamed Church',
+        denomination: item.denomination || profileData?.denomination || null,
+        address: item.address || profileData?.address || null,
+        city: item.city || profileData?.city || null,
+        state: item.state || profileData?.state || null,
+        zip_code: item.zipCode || profileData?.zip_code || null,
+        latitude: item.latitude || profileData?.latitude || null,
+        longitude: item.longitude || profileData?.longitude || null,
+      })
+      .select('id')
+      .single()
+
+    if (insertChurchError) {
+      throw new Error(insertChurchError.message)
+    }
+
+    if (!insertedChurch?.id) {
+      throw new Error('Church record was not created.')
+    }
+
+    return insertedChurch.id
   }
 
-  setSuccessMessage(`${display(item.churchName)} approved.`)
-  await loadPendingVerifications()
-  setActionLoadingId('')
-}
+  async function approvePendingVerification(item: PendingVerificationItem) {
+    setActionLoadingId(item.id)
+    setErrorMessage('')
+    setSuccessMessage('')
+
+    try {
+      if (!item.userId) {
+        throw new Error('This pending request does not have a user_id, so it cannot be approved yet.')
+      }
+
+      const now = new Date().toISOString()
+      const churchEntityId = await getOrCreateChurchEntity(item)
+
+      const { error: profileUpsertError } = await supabase
+        .from('church_profiles')
+        .upsert(
+          {
+            id: item.userId,
+            church_id: churchEntityId,
+            church_name: item.churchName || 'Unnamed Church',
+            full_name: item.fullName,
+            role_title: item.roleTitle,
+            email: item.email,
+            phone: item.phone,
+            website: item.website,
+            address: item.address,
+            city: item.city,
+            state: item.state,
+            zip_code: item.zipCode,
+            denomination: item.denomination,
+            authority_explanation: item.authorityExplanation,
+            verification_status: 'approved',
+            onboarding_complete: true,
+            updated_at: now,
+          },
+          { onConflict: 'id' }
+        )
+
+      if (profileUpsertError) {
+        throw new Error(profileUpsertError.message)
+      }
+
+      const { error: userProfileError } = await supabase
+        .from('profiles')
+        .update({
+          role: 'church',
+          church_id: churchEntityId,
+        })
+        .eq('id', item.userId)
+
+      if (userProfileError) {
+        throw new Error(userProfileError.message)
+      }
+
+      if (item.source === 'claim_request') {
+        const { error: claimError } = await supabase
+          .from('church_claim_requests')
+          .update({
+            status: 'approved',
+            church_id: item.userId,
+          })
+          .eq('id', item.id)
+
+        if (claimError) {
+          throw new Error(claimError.message)
+        }
+      }
+
+      setSuccessMessage(`${display(item.churchName)} approved. Church ID: ${churchEntityId}`)
+      await loadPendingVerifications()
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Approval failed.')
+    }
+
+    setActionLoadingId('')
+  }
 
   async function rejectPendingVerification(item: PendingVerificationItem) {
     setActionLoadingId(item.id)
@@ -523,13 +622,14 @@ export default function AdminPage() {
             href="/admin/users"
             className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-bold text-white/75 transition hover:bg-white/10"
           >
-            <Link
-            href="/admin/church-lookup"
-            className="rounded-2xl bg-teal-400 px-5 py-3 font-black text-black hover:bg-teal-300"
-            >
-            Church UUID Lookup
-            </Link>
             Users
+          </Link>
+
+          <Link
+            href="/admin/church-lookup"
+            className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-bold text-white/75 transition hover:bg-white/10"
+          >
+            Church UUID Lookup
           </Link>
 
           <Link
@@ -736,6 +836,9 @@ function VerificationCard({
             <Badge tone={item.userId ? 'emerald' : 'red'}>
               {item.userId ? 'Auth linked' : 'No user id'}
             </Badge>
+            <Badge tone={item.churchEntityId ? 'emerald' : 'red'}>
+              {item.churchEntityId ? 'Church entity exists' : 'No church entity'}
+            </Badge>
           </div>
 
           <h2 className="mt-4 text-2xl font-black tracking-tight">
@@ -770,8 +873,14 @@ function VerificationCard({
 
       <div className="mt-6 grid gap-4 md:grid-cols-3">
         <InfoBlock label="Record ID" value={item.id} />
-        <InfoBlock label="Church Profile ID After Approval" value={item.churchProfileId} />
+        <InfoBlock label="Church Profile ID" value={item.churchProfileId} />
+        <InfoBlock label="Church Entity ID" value={item.churchEntityId} />
+      </div>
+
+      <div className="mt-4 grid gap-4 md:grid-cols-3">
         <InfoBlock label="User ID" value={item.userId} />
+        <InfoBlock label="Claimed Church ID" value={item.claimedChurchId} />
+        <InfoBlock label="Source" value={item.source} />
       </div>
 
       <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
